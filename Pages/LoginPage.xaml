@@ -17,8 +17,7 @@
 
         <!-- Logo & Title -->
         <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
-            <!-- replace Source with your actual logo path -->
-            <Image Source="/Assets/KeysightLogo.png"
+            <Image Source="C:\Users\chank\Documents\UM\Y3S2\WIA3002 ACADEMIC PROJECT I\GitGUI\Assets\KeysightLogo.png"
                    Width="600" Height="100"
                    Margin="0,0,0,30"/>
             <TextBlock Text="PTEM GitWave"
@@ -30,11 +29,11 @@
 
         <!-- Login Button -->
         <Button Grid.Row="1"
-            Click="GitHubLoginButton_Click"
-            HorizontalAlignment="Center"
-            Padding="16,8"
-            Margin="0,0,0,75"
-            Width="220">
+                Command="{Binding LoginCommand}"
+                HorizontalAlignment="Center"
+                Padding="16,8"
+                Margin="0,0,0,75"
+                Width="220">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <materialDesign:PackIcon 
                     Kind="Github" 

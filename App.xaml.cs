@@ -1,16 +1,12 @@
 ﻿using GitGUI.Core;
+using GitGUI.Pages;
 using GitGUI.Services;
 using GitGUI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
-using System.Configuration;
-using System.Data;
 using System.Windows;
 
 namespace GitGUI
 {
-    /// <summary>
-    /// Interaction logic for App.xaml
-    /// </summary>
     public partial class App : System.Windows.Application
     {
         public static IServiceProvider Services { get; private set; }
@@ -19,23 +15,41 @@ namespace GitGUI
         {
             var services = new ServiceCollection();
 
-            // register your services & VMs
-            services.AddSingleton<IGitService, GitLibService>();
-            services.AddTransient<OperationViewModel>();
-            services.AddTransient<Pages.OperationPage>();
+            // 1) Register the GCM credential provider
+            services.AddSingleton<IGitCredentialProvider, GcmCredentialProvider>();
 
-            // register MainWindow so it can take dependencies if you like
+            // 2) Register GitLibService with the provider (factory so DI passes the provider)
+            services.AddSingleton<IGitService>(sp =>
+            {
+                var credProvider = sp.GetRequiredService<IGitCredentialProvider>();
+                return new GitLibService(credProvider);
+            });
+
+            // Register ViewModels
+            services.AddTransient<LoginViewModel>();
+            services.AddSingleton<OperationViewModel>();
+
+            // Register Pages
+            services.AddTransient<LoginPage>();
+            services.AddTransient<OperationPage>();
+
+            // Register MainWindow
             services.AddSingleton<MainWindow>();
 
             Services = services.BuildServiceProvider();
 
-            // resolve & show
-            //var win = Services.GetRequiredService<MainWindow>();
-            //win.Show();
-            var window = Services.GetRequiredService<MainWindow>();
-            window.Show();
+            // Start Kestrel listener for OAuth
+            Globals.InitiateListener();
+
+            // Resolve MainWindow and show
+            var mainWindow = Services.GetRequiredService<MainWindow>();
+            mainWindow.Show();
+
+            // Navigate to LoginPage first
+            var loginPage = Services.GetRequiredService<LoginPage>();
+            mainWindow.NavigateTo(loginPage);
+
             base.OnStartup(e);
         }
     }
-
 }

@@ -11,274 +11,282 @@
       VerticalAlignment="Stretch"
       HorizontalAlignment="Stretch">
 
-    <Grid Background="White">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="150"/>
-        </Grid.RowDefinitions>
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Page.Resources>
 
-        <GroupBox Grid.Row="0" Header="Repository" Margin="0,0,0,10">
-            <StackPanel Orientation="Vertical" Margin="10">
-                <!-- Row 1: Local Repo -->
-                <DockPanel LastChildFill="True" VerticalAlignment="Top">
-                    <Label Content="Path:" DockPanel.Dock="Left" VerticalAlignment="Center"/>
-                    <Button Content="Create"
-                        Command="{Binding CreateRepoCommand}"
-                        Margin="5,0,0,0"
-                        MinWidth="75"
-                        VerticalAlignment="Center"
-                        DockPanel.Dock="Right"/>
-                    <Button Content="Open"
-                        Command="{Binding OpenRepoCommand}"
-                        MinWidth="75"
-                        VerticalAlignment="Center"
-                        DockPanel.Dock="Right"/>
-                    <Button Content="Browse…"
-                        Command="{Binding BrowseFolderCommand}"
-                        MinWidth="75"
-                        Margin="5,0"
-                        VerticalAlignment="Center"
-                        DockPanel.Dock="Right"/>
-                    <TextBox Text="{Binding RepoPath}"
-                        Margin="5,0"
-                        VerticalAlignment="Center"
-                        HorizontalAlignment="Stretch"/>
-                </DockPanel>
-
-                <!-- Row 2: Clone Repo -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="2*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="2*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <Label 
-                        Grid.Column="0" 
-                        Content="Source URL:" 
-                        VerticalAlignment="Center"/>
-                    <TextBox 
-                        Grid.Column="1" 
-                        Text="{Binding SourceUrl}" 
-                        Margin="5,0" 
-                        VerticalAlignment="Center"/>
-                    <Label 
-                        Grid.Column="2" 
-                        Content="Target Path:" 
-                        VerticalAlignment="Center" 
-                        Margin="10,0,0,0"/>
-                    <TextBox 
-                        Grid.Column="3" 
-                        Text="{Binding CloneTargetPath}" 
-                        Margin="5,0" 
-                        VerticalAlignment="Center"/>
-                    <Button 
-                        Grid.Column="5" 
-                        Content="Clone" 
-                        Command="{Binding CloneRepoCommand}" 
-                        MinWidth="75" 
-                        Margin="10,0,0,0" 
-                        VerticalAlignment="Center"/>
-                </Grid>
-
-            </StackPanel>
-        </GroupBox>
-
-
-
-        <!-- Main Content -->
-        <Grid Grid.Row="1" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*"/>
-                <ColumnDefinition Width="3*"/>
-                <ColumnDefinition Width="2.5*"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Commit Graph Panel -->
-            <GroupBox Header="Commit Graph" Grid.Column="0" Margin="5">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ItemsControl x:Name="CommitGraphList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Margin="5">
-                                    <Ellipse Width="10" Height="10" Fill="DarkBlue" Margin="5"/>
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Message}" FontWeight="Bold"/>
-                                        <TextBlock Text="{Binding Hash}" FontSize="10" Foreground="Gray"/>
-                                        <TextBlock Text="{Binding Date}" FontSize="10" Foreground="DarkGray"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </GroupBox>
-
-            <!-- File Changes Panel -->
-            <GroupBox Header="Changes" Grid.Column="1" Margin="5">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <!-- For Staged Changes label -->
-                        <RowDefinition Height="*" />
-                        <!-- For Staged Changes TreeView -->
-                        <RowDefinition Height="Auto" />
-                        <!-- For Unstaged Changes label -->
-                        <RowDefinition Height="*" />
-                        <!-- For Unstaged Changes TreeView -->
-                        <RowDefinition Height="Auto" />
-                        <!-- For Buttons under Unstaged Changes -->
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <!-- Staged Changes Label -->
-                    <Label Grid.Row="0" Content="Staged Changes" FontWeight="Bold" Margin="2"/>
-
-                    <!-- Staged Changes TreeView -->
-                    <TreeView Grid.Row="1" ItemsSource="{Binding StagedChanges}" VerticalAlignment="Stretch" BorderThickness="0" 
-                        SelectedItemChanged="TreeView_SelectedItemChanged">
-                        <TreeView.ItemTemplate>
-                            <DataTemplate DataType="{x:Type localModels:ChangeItem}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding FilePath}" />
-                                    <TextBlock Text="{Binding Status}" Foreground="Green" Margin="5"/>
-                                </StackPanel>
-                            </DataTemplate>
-                        </TreeView.ItemTemplate>
-                    </TreeView>
-
-                    <!-- Unstaged Changes Label -->
-                    <Label Grid.Row="2" Content="Unstaged Changes" FontWeight="Bold" Margin="2"/>
-                    
-                    <!-- Unstaged Changes TreeView -->
-                    <TreeView Grid.Row="3" ItemsSource="{Binding UnstagedChanges}" VerticalAlignment="Stretch" BorderThickness="0" 
-                        SelectedItemChanged="TreeView_SelectedItemChanged">
-                        <TreeView.ItemTemplate>
-                            <DataTemplate DataType="{x:Type localModels:ChangeItem}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding FilePath}" />
-                                    <TextBlock Text="{Binding Status}" Foreground="Red" Margin="5"/>
-                                </StackPanel>
-                            </DataTemplate>
-                        </TreeView.ItemTemplate>
-                    </TreeView>
-
-                    <!-- Buttons below Staged Changes TreeView -->
-                    <WrapPanel Grid.Row="4" HorizontalAlignment="Center">
-                        <Button Content="Stage" Width="75" Margin="5" Command="{Binding StageCommand}" CommandParameter="{Binding SelectedChange}" />
-                        <Button Content="Unstage" Width="75" Margin="5" Command="{Binding UnstageCommand}" CommandParameter="{Binding SelectedChange}" />
-                        <Button Content="Show" Width="75" Margin="5" Command="{Binding ShowCommand}" />
-                    </WrapPanel>
-                </Grid>
-            </GroupBox>
-
-            <!-- Commit & Branch Panel -->
-            <Grid Grid.Column="2" Margin="5">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <!-- Commit box -->
-                    <RowDefinition Height="*"/>
-                    <!-- Branch box -->
-                </Grid.RowDefinitions>
-
-                <!-- ── Commit only ──────────────── -->
-                <GroupBox Header="Commit" Grid.Row="0" Margin="0,0,0,5">
-                    <StackPanel Margin="10">
-                        <TextBlock Text="Commit Message:"/>
-                        <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}"
-                     AcceptsReturn="True" Height="60" Margin="0,5"/>
-                        <Button Content="Commit"
-                    Command="{Binding CommitCommand}"
-                    Width="100"
-                    HorizontalAlignment="Center"/>
-                    </StackPanel>
-                </GroupBox>
-
-                <!-- ── Branch management ──────────────── -->
-                <GroupBox Header="Branches" Grid.Row="1">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="10">
-
-                            <!-- Current branch indicator -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Text="Current Branch:"/>
-                                <TextBlock Text="{Binding CurrentBranch}"
-                               FontWeight="Bold" Margin="6,0"/>
-                            </StackPanel>
-
-                            <!-- Branch selector + Checkout -->
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <ComboBox Grid.Column="0"
-                              ItemsSource="{Binding Branches}"
-                              SelectedItem="{Binding SelectedBranch}"
-                              DisplayMemberPath="Name"/>
-                                <Button Grid.Column="1"
-                            Content="Checkout"
-                            Command="{Binding CheckoutBranchCommand}"
-                            Width="80" Margin="6,0"/>
-                            </Grid>
-
-                            <!-- Merge / Delete -->
-                            <WrapPanel HorizontalAlignment="Center">
-                                <Button Content="Merge"
-                            Command="{Binding MergeBranchCommand}"
-                            Width="90" Margin="4"/>
-                                <Button Content="Delete"
-                            Command="{Binding DeleteBranchCommand}"
-                            Width="90" Margin="4"/>
-                            </WrapPanel>
-
-                            <!-- Create new branch -->
-                            <Grid Margin="0,10,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0"
-                             Text="{Binding NewBranchName, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,6,0"/>
-                                <Button Grid.Column="1"
-                            Content="New Branch"
-                            Command="{Binding CreateBranchCommand}"
-                            Width="90"/>
-                            </Grid>
-
-                            <!-- Push / Pull -->
-                            <WrapPanel HorizontalAlignment="Center" Margin="0,10,0,0">
-                                <Button Content="Push"
-                            Command="{Binding PushCommand}"
-                            Width="90" Margin="4"/>
-                                <Button Content="Pull"
-                            Command="{Binding PullCommand}"
-                            Width="90" Margin="4"/>
-                            </WrapPanel>
-
-                        </StackPanel>
-                    </ScrollViewer>
-                </GroupBox>
-            </Grid>
+    <Grid>
+        <Grid Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" 
+          Background="White" Opacity="0.5" Panel.ZIndex="10">
+            <ProgressBar IsIndeterminate="True" 
+                     Width="200" 
+                     Height="30" 
+                     HorizontalAlignment="Center" 
+                     VerticalAlignment="Center"/>
         </Grid>
 
-        <!-- Output Log -->
-        <GroupBox Header="Output Log" Grid.Row="2" Grid.ColumnSpan="2">
-            <TextBox x:Name="OutputTextBox"
-             IsReadOnly="True"
-             Text="{Binding OutputLog, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
-             TextWrapping="Wrap"
-             VerticalScrollBarVisibility="Auto"
-             HorizontalScrollBarVisibility="Auto"
-             FontFamily="Consolas"
-             Background="Black"
-             Foreground="LightGreen"
-             Height="Auto"/>
-        </GroupBox>
+        <Grid Background="White">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="150"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Right" Margin="5">
+                <!-- Username -->
+                <TextBlock Text="{Binding AuthenticatedUser.Login}" 
+           VerticalAlignment="Center" 
+           FontWeight="SemiBold"/>
+            </StackPanel>
+
+            <GroupBox Grid.Row="1" Header="Repository" Margin="0,0,0,10">
+                <StackPanel Orientation="Vertical" Margin="10">
+                    <!-- Row 1: Local Repo -->
+                    <DockPanel LastChildFill="True" VerticalAlignment="Top">
+                        <Label Content="Path:" DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                        <Button Content="Create"
+                    Command="{Binding CreateRepoCommand}"
+                    Margin="5,0,0,0"
+                    MinWidth="75"
+                    VerticalAlignment="Center"
+                    DockPanel.Dock="Right"/>
+                        <Button Content="Open"
+                    Command="{Binding OpenRepoCommand}"
+                    MinWidth="75"
+                    VerticalAlignment="Center"
+                    DockPanel.Dock="Right"/>
+                        <Button Content="Browse…"
+                    Command="{Binding BrowseFolderCommand}"
+                    MinWidth="75"
+                    Margin="5,0"
+                    VerticalAlignment="Center"
+                    DockPanel.Dock="Right"/>
+                        <TextBox Text="{Binding RepoPath}"
+                    Margin="5,0"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Stretch"/>
+                    </DockPanel>
+
+                    <!-- Row 2: Clone Repo -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Label 
+                            Grid.Column="0" 
+                            Content="Source URL:" 
+                            VerticalAlignment="Center"/>
+                        <TextBox 
+                            Grid.Column="1" 
+                            Text="{Binding SourceUrl}" 
+                            Margin="5,0" 
+                            VerticalAlignment="Center"/>
+                        <Button 
+                            Grid.Column="2" 
+                            Content="Clone" 
+                            Command="{Binding CloneRepoCommand}" 
+                            MinWidth="75" 
+                            VerticalAlignment="Center"/>
+                    </Grid>
+
+                </StackPanel>
+            </GroupBox>
+
+
+
+            <!-- Main Content -->
+            <Grid Grid.Row="2" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="3*"/>
+                    <ColumnDefinition Width="2.5*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Commit Graph Panel -->
+                <GroupBox Header="Commit Graph" Grid.Column="0" Margin="5">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="CommitGraphList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="5">
+                                        <Ellipse Width="10" Height="10" Fill="DarkBlue" Margin="5"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Message}" FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding Hash}" FontSize="10" Foreground="Gray"/>
+                                            <TextBlock Text="{Binding Date}" FontSize="10" Foreground="DarkGray"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </GroupBox>
+
+                <!-- File Changes Panel -->
+                <GroupBox Header="Changes" Grid.Column="1" Margin="5">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <!-- For Staged Changes label -->
+                            <RowDefinition Height="*" />
+                            <!-- For Staged Changes TreeView -->
+                            <RowDefinition Height="Auto" />
+                            <!-- For Unstaged Changes label -->
+                            <RowDefinition Height="*" />
+                            <!-- For Unstaged Changes TreeView -->
+                            <RowDefinition Height="Auto" />
+                            <!-- For Buttons under Unstaged Changes -->
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Staged Changes Label -->
+                        <Label Grid.Row="0" Content="Staged Changes" FontWeight="Bold" Margin="2"/>
+
+                        <!-- Staged Changes TreeView -->
+                        <TreeView Grid.Row="1" ItemsSource="{Binding StagedChanges}" VerticalAlignment="Stretch" BorderThickness="0" 
+                    SelectedItemChanged="TreeView_SelectedItemChanged">
+                            <TreeView.ItemTemplate>
+                                <DataTemplate DataType="{x:Type localModels:ChangeItem}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding FilePath}" />
+                                        <TextBlock Text="{Binding Status}" Foreground="Green" Margin="5"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+
+                        <!-- Unstaged Changes Label -->
+                        <Label Grid.Row="2" Content="Unstaged Changes" FontWeight="Bold" Margin="2"/>
+
+                        <!-- Unstaged Changes TreeView -->
+                        <TreeView Grid.Row="3" ItemsSource="{Binding UnstagedChanges}" VerticalAlignment="Stretch" BorderThickness="0" 
+                    SelectedItemChanged="TreeView_SelectedItemChanged">
+                            <TreeView.ItemTemplate>
+                                <DataTemplate DataType="{x:Type localModels:ChangeItem}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding FilePath}" />
+                                        <TextBlock Text="{Binding Status}" Foreground="Red" Margin="5"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+
+                        <!-- Buttons below Staged Changes TreeView -->
+                        <WrapPanel Grid.Row="4" HorizontalAlignment="Center">
+                            <Button Content="Stage" Width="75" Margin="5" Command="{Binding StageCommand}" CommandParameter="{Binding SelectedChange}" />
+                            <Button Content="Unstage" Width="75" Margin="5" Command="{Binding UnstageCommand}" CommandParameter="{Binding SelectedChange}" />
+                            <Button Content="Show" Width="75" Margin="5" Command="{Binding ShowCommand}" />
+                        </WrapPanel>
+                    </Grid>
+                </GroupBox>
+
+                <!-- Commit & Branch Panel -->
+                <Grid Grid.Column="2" Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- Commit box -->
+                        <RowDefinition Height="*"/>
+                        <!-- Branch box -->
+                    </Grid.RowDefinitions>
+
+                    <!-- ── Commit only ──────────────── -->
+                    <GroupBox Header="Commit" Grid.Row="0" Margin="0,0,0,5">
+                        <StackPanel Margin="10">
+                            <TextBlock Text="Commit Message:"/>
+                            <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" 
+                             AcceptsReturn="True" Height="60" Margin="0,5"/>
+                            <Button Content="Commit"
+                            Command="{Binding CommitCommand}"
+                            Width="100"
+                            HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- ── Branch management ──────────────── -->
+                    <GroupBox Header="Branches" Grid.Row="1">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="10">
+
+                                <!-- Current branch indicator -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="Current Branch:"/>
+                                    <TextBlock Text="{Binding CurrentBranch}" 
+                                       FontWeight="Bold" Margin="6,0"/>
+                                </StackPanel>
+
+                                <!-- Branch selector + Checkout -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding Branches}"
+                                      SelectedItem="{Binding SelectedBranch}"
+                                      DisplayMemberPath="Name"/>
+                                    <Button Grid.Column="1"
+                                    Content="Checkout"
+                                    Command="{Binding CheckoutBranchCommand}"
+                                    Width="80" Margin="6,0"/>
+                                </Grid>
+
+                                <!-- Merge / Delete -->
+                                <WrapPanel HorizontalAlignment="Center">
+                                    <Button Content="Merge"
+                                    Command="{Binding MergeBranchCommand}"
+                                    Width="90" Margin="4"/>
+                                    <Button Content="Delete"
+                                    Command="{Binding DeleteBranchCommand}"
+                                    Width="90" Margin="4"/>
+                                </WrapPanel>
+
+                                <!-- Create new branch -->
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0"
+                                     Text="{Binding NewBranchName, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,0,6,0"/>
+                                    <Button Grid.Column="1"
+                                    Content="New Branch"
+                                    Command="{Binding CreateBranchCommand}"
+                                    Width="90"/>
+                                </Grid>
+
+                                <!-- Push / Pull -->
+                                <WrapPanel HorizontalAlignment="Center" Margin="0,10,0,0">
+                                    <Button Content="Push"
+                                    Command="{Binding PushCommand}"
+                                    Width="90" Margin="4"/>
+                                    <Button Content="Pull"
+                                    Command="{Binding PullCommand}"
+                                    Width="90" Margin="4"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </GroupBox>
+                </Grid>
+            </Grid>
+
+            <!-- Output Log -->
+            <GroupBox Header="Output Log" Grid.Row="3" Grid.ColumnSpan="2">
+                <TextBox x:Name="OutputTextBox"
+                 IsReadOnly="True"
+                 Text="{Binding OutputLog, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                 TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"
+                 FontFamily="Consolas"
+                 Background="Black"
+                 Foreground="LightGreen"
+                 Height="Auto"/>
+            </GroupBox>
+        </Grid>
     </Grid>
 </Page>

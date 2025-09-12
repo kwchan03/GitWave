@@ -15,6 +15,10 @@ namespace GitGUI.Core
         (IEnumerable<ChangeItem> StagedChanges, IEnumerable<ChangeItem> UnstagedChanges) GetChanges();
         void StageFile(string relativePath);
         void UnstageFile(string relativePath);
+        void SetRepoUserFromAuthenticatedUser(GitHubUser user);
         void Commit(string commitMessage);
+        void CloneRepository(string sourceUrl, string parentDirectory, GitHubUser AuthenticatedUser);
+        void PullCurrentBranch(string path, GitHubUser AuthenticatedUser);
+        void PushCurrentBranch(string path, GitHubUser AuthenticatedUser);
     }
 }

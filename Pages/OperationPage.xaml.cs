@@ -14,6 +14,15 @@ namespace GitGUI.Pages
         {
             InitializeComponent();
             DataContext = vm;
+
+            vm.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(vm.OutputLog))
+                {
+                    // Scroll to the end whenever OutputLog changes
+                    OutputTextBox.ScrollToEnd();
+                }
+            };
         }
 
         private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -27,7 +36,7 @@ namespace GitGUI.Pages
                 {
                     // You can now use the selectedChange for any logic or pass it to your ViewModel
                     // Example: Update the selected item in the ViewModel
-                    (this.DataContext as OperationViewModel)?.SetSelectedChange(selectedChange);
+                    (this.DataContext as OperationViewModel).SelectedChange = selectedChange;
                 }
             }
         }

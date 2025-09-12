@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using System.Windows.Controls;
 
 namespace GitGUI
 {
@@ -9,12 +10,13 @@ namespace GitGUI
     {
         public MainWindow()
         {
+            InitializeComponent();
         }
 
-        public MainWindow(Pages.OperationPage operationPage)
+        // Navigate to a page in the main frame
+        public void NavigateTo(Page page)
         {
-            InitializeComponent();
-            MainFrame.Navigate(operationPage);
+            MainFrame.Navigate(page);
         }
 
     }

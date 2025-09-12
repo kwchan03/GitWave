@@ -8,46 +8,58 @@
              d:DesignHeight="450" d:DesignWidth="800">
     <Grid Background="White">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition />
             <ColumnDefinition Width="4"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition />
         </Grid.ColumnDefinitions>
 
-        <!-- OLD version -->
-        <StackPanel Grid.Column="0" Margin="6">
-            <TextBlock Text="Before" FontWeight="Bold" Margin="0,0,0,4"/>
-            <Border Background="LightGray" Padding="4" Margin="0,0,0,2">
-                <TextBlock Text="Step: ValidateUser" />
-            </Border>
-            <Border Background="Yellow" Padding="4" Margin="0,0,0,2">
-                <TextBlock Text="Timeout: 5s" />
-            </Border>
-            <Border Background="LightCoral" Padding="4" Margin="0,0,0,2">
-                <TextBlock Text="Retries: 2" />
-            </Border>
-            <Border Background="Yellow" Padding="4" Margin="0,0,0,2">
-                <TextBlock Text="Verdict: Not Set" />
-            </Border>
-        </StackPanel>
+        <!-- BEFORE -->
+        <Border Grid.Column="0" BorderBrush="#CCC" BorderThickness="1" Padding="6">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Before" FontWeight="Bold" Margin="0,0,0,6"/>
+                <ListView Grid.Row="1" ItemsSource="{Binding Rows}">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{Binding BeforeBrush}" Padding="4" Margin="0,0,0,4">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Before}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </Border>
 
-        <!-- Separator -->
-        <Border Grid.Column="1" Background="Gray" Width="1"/>
+        <!-- Divider -->
+        <Grid Grid.Column="1" Background="#DDD"/>
 
-        <!-- NEW version -->
-        <StackPanel Grid.Column="2" Margin="6">
-            <TextBlock Text="After" FontWeight="Bold" Margin="0,0,0,4"/>
-            <Border Background="LightGray" Padding="4" Margin="0,0,0,2">
-                <TextBlock Text="Step: ValidateUser" />
-            </Border>
-            <Border Background="Yellow" Padding="4" Margin="0,0,0,2">
-                <TextBlock Text="Timeout: 10s" />
-            </Border>
-            <Border Background="Yellow" Padding="4" Margin="0,0,0,2">
-                <TextBlock Text="Verdict: Pass if Yes" />
-            </Border>
-            <Border Background="LightGreen" Padding="4" Margin="0,0,0,2">
-                <TextBlock Text="LogLevel: Debug" />
-            </Border>
-        </StackPanel>
+        <!-- AFTER -->
+        <Border Grid.Column="2" BorderBrush="#CCC" BorderThickness="1" Padding="6">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="After" FontWeight="Bold" Margin="0,0,0,6"/>
+                <ListView Grid.Row="1" ItemsSource="{Binding Rows}">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{Binding AfterBrush}" Padding="4" Margin="0,0,0,4">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding After}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

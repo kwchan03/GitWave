@@ -1,179 +1,190 @@
 ﻿using GitGUI.Core;
 using GitGUI.Models;
+using GitGUI.Services;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Windows.Input;
 
 namespace GitGUI.ViewModels
 {
-    public class OperationViewModel : INotifyPropertyChanged
+    public class OperationViewModel : BaseViewModel
     {
         private readonly IGitService _git;
+
+        // ---------------------------
+        // GitHub OAuth
+        // ---------------------------
+        private GitHubUser _authenticatedUser;
+        public GitHubUser AuthenticatedUser
+        {
+            get => _authenticatedUser;
+            set => SetProperty(ref _authenticatedUser, value);
+        }
+
+        // ---------------------------
+        // Repository / Branch / Commit fields
+        // ---------------------------
+        private string _repoPath = "";
+        public string RepoPath
+        {
+            get => _repoPath;
+            set => SetProperty(ref _repoPath, value);
+        }
+        public string SourceUrl { get; set; } = "";
+        public BranchInfo SelectedBranch { get; set; }
+        public string NewBranchName { get; set; } = "";
+        public string CommitMessage { get; set; } = "";
+        public ChangeItem SelectedChange { get; set; }
+        private string _currentBranch = "<none>";
+        public string CurrentBranch
+        {
+            get => _currentBranch;
+            private set => SetProperty(ref _currentBranch, value);
+        }
+
+
+        // ---------------------------
+        // Collections
+        // ---------------------------
         public ObservableCollection<CommitInfo> Commits { get; } = new ObservableCollection<CommitInfo>();
         public ObservableCollection<BranchInfo> Branches { get; } = new ObservableCollection<BranchInfo>();
         public ObservableCollection<ChangeItem> StagedChanges { get; } = new ObservableCollection<ChangeItem>();
         public ObservableCollection<ChangeItem> UnstagedChanges { get; } = new ObservableCollection<ChangeItem>();
 
-        private string _repoPath = string.Empty;
-        private string _outputLog = string.Empty;
-        private string _commitMessage = string.Empty;
-        private const int MaxLogLength = 10000; // Maximum number of characters in the log
-        private const int MaxLogLines = 1000; // Maximum number of lines in the log
+        // ---------------------------
+        // UI State / Logging
+        // ---------------------------
+        private string _outputLog = "";
+        public string OutputLog
+        {
+            get => _outputLog;
+            private set => SetProperty(ref _outputLog, value);
+        }
 
-        public event PropertyChangedEventHandler? PropertyChanged;
+        private bool _isBusy;
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set => SetProperty(ref _isBusy, value);
+        }
 
-        /// <summary>
-        /// The list of recent commits in the opened repo.
-        /// </summary>
+        private const int MaxLogLength = 10000;
+        private const int MaxLogLines = 1000;
+
+        // ---------------------------
+        // Commands
+        // ---------------------------
         public ICommand BrowseFolderCommand { get; }
         public ICommand OpenRepoCommand { get; }
         public ICommand CreateRepoCommand { get; }
-        public ICommand LoadCommitsCommand { get; }
-        public ICommand ClearLogCommand { get; }
-
         public ICommand LoadBranchesCommand { get; }
         public ICommand CheckoutBranchCommand { get; }
         public ICommand CreateBranchCommand { get; }
         public ICommand MergeBranchCommand { get; }
-
         public ICommand RefreshChangesCommand { get; }
         public ICommand StageCommand { get; }
         public ICommand UnstageCommand { get; }
         public ICommand CommitCommand { get; }
+        public ICommand ClearLogCommand { get; }
+        public ICommand CloneRepoCommand { get; }
+        public ICommand PullCommand { get; }
+        public ICommand PushCommand { get; }
 
-        /// Command to clear the output log
-        /// </summary>
-
+        // ---------------------------
+        // Constructor
+        // ---------------------------
         public OperationViewModel(IGitService git)
         {
             _git = git ?? throw new ArgumentNullException(nameof(git));
 
+            // ---------------------------
+            // Repo operations
+            // ---------------------------
             BrowseFolderCommand = new RelayCommand(_ => ExecuteBrowseFolder());
             OpenRepoCommand = new RelayCommand(_ => ExecuteOpenRepo());
-            ClearLogCommand = new RelayCommand(_ => ClearLog());
             CreateRepoCommand = new RelayCommand(_ => ExecuteCreateRepo(), _ => !string.IsNullOrWhiteSpace(RepoPath));
+            ClearLogCommand = new RelayCommand(_ => ClearLog());
 
+            // ---------------------------
+            // Branch operations
+            // ---------------------------
             LoadBranchesCommand = new RelayCommand(_ => ExecuteLoadBranches());
             CheckoutBranchCommand = new RelayCommand(_ => ExecuteCheckoutBranch(), _ => SelectedBranch != null);
             CreateBranchCommand = new RelayCommand(_ => ExecuteCreateBranch(), _ => !string.IsNullOrWhiteSpace(NewBranchName));
             MergeBranchCommand = new RelayCommand(_ => ExecuteMergeBranch(), _ => SelectedBranch != null);
 
+            // ---------------------------
+            // File changes
+            // ---------------------------
             RefreshChangesCommand = new RelayCommand(_ => ExecuteRefreshChanges());
-            StageCommand = new RelayCommand(_ => ExecuteStageFile());
-            UnstageCommand = new RelayCommand(_ => ExecuteUnstageFile());
+            StageCommand = new RelayCommand(_ => ExecuteStageFile(), _ => SelectedChange != null);
+            UnstageCommand = new RelayCommand(_ => ExecuteUnstageFile(), _ => SelectedChange != null);
             CommitCommand = new RelayCommand(_ => ExecuteCommit(), _ => !string.IsNullOrWhiteSpace(CommitMessage));
+
+            // ---------------------------
+            // GitHub operations
+            // ---------------------------
+            CloneRepoCommand = new RelayCommand(_ => ExecuteCloneRepo(), _ =>
+                !string.IsNullOrWhiteSpace(SourceUrl) &&
+                AuthenticatedUser != null);
+
+            PullCommand = new RelayCommand(_ => ExecutePullCurrentBranch(), _ =>
+                !string.IsNullOrWhiteSpace(RepoPath) && AuthenticatedUser != null);
+
+            PushCommand = new RelayCommand(_ => ExecutePushCurrentBranch(), _ =>
+                !string.IsNullOrWhiteSpace(RepoPath) && AuthenticatedUser != null);
         }
 
-        /// <summary>
-        /// The folder path of the repository to open or init.
-        /// </summary>
-        public string RepoPath
-        {
-            get => _repoPath;
-            set
-            {
-                if (_repoPath != value)
-                {
-                    _repoPath = value;
-                    OnPropertyChanged();
-                    // Re-evaluate CanExecute for commands that depend on RepoPath
-                    CommandManager.InvalidateRequerySuggested();
-                }
-            }
-        }
-
-        private BranchInfo? _selectedBranch;
-        public BranchInfo? SelectedBranch
-        {
-            get => _selectedBranch;
-            set { _selectedBranch = value; OnPropertyChanged(); }
-        }
-
-        private string _newBranchName = "";
-        public string NewBranchName
-        {
-            get => _newBranchName;
-            set { _newBranchName = value; OnPropertyChanged(); }
-        }
-
-        private string _currentBranch = string.Empty;
-        public string CurrentBranch
-        {
-            get => _currentBranch;
-            private set
-            {
-                if (_currentBranch != value)
-                {
-                    _currentBranch = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private ChangeItem _selectedChange;
-        public ChangeItem SelectedChange
-        {
-            get => _selectedChange;
-            set
-            {
-                if (_selectedChange != value)
-                {
-                    _selectedChange = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-        public void SetSelectedChange(ChangeItem changeItem)
-        {
-            SelectedChange = changeItem;
-        }
-
-        public string CommitMessage
-        {
-            get => _commitMessage;
-            set
-            {
-                if (_commitMessage != value)
-                {
-                    _commitMessage = value;
-                    OnPropertyChanged();
-                    // Re-evaluate whether CommitCommand can execute
-                    CommandManager.InvalidateRequerySuggested();
-                }
-            }
-        }
-
-        public string OutputLog
-        {
-            get => _outputLog;
-            private set
-            {
-                _outputLog = value;
-                OnPropertyChanged();
-            }
-        }
-
+        // ---------------------------
+        // Logging
+        // ---------------------------
         public void ClearLog()
         {
-            OutputLog = string.Empty;
+            OutputLog = "";
             AppendLog("Log cleared");
         }
 
-        /// <summary>
-        /// Gets the last N lines from the log
-        /// </summary>
-        /// <param name="count">Number of lines to retrieve</param>
-        /// <returns>The last N lines of the log</returns>
-        public string GetLastLines(int count)
+        private void AppendLog(string message)
         {
-            if (string.IsNullOrEmpty(OutputLog))
-                return string.Empty;
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            var logEntry = $"{timestamp} – {message}{Environment.NewLine}";
 
-            var lines = OutputLog.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-            return string.Join(Environment.NewLine, lines.Skip(Math.Max(0, lines.Length - count)));
+            if (OutputLog.Length + logEntry.Length > MaxLogLength)
+            {
+                var lines = OutputLog.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+                var trimmed = lines.Skip(Math.Max(0, lines.Length - MaxLogLines)).ToArray();
+                OutputLog = string.Join(Environment.NewLine, trimmed) + Environment.NewLine;
+            }
+
+            OutputLog += logEntry;
+            OnPropertyChanged(nameof(OutputLog));
         }
 
+        // ---------------------------
+        // Helper for all actions
+        // ---------------------------
+        private void ExecuteAction(Action action, string successMessage = null, Action onSuccess = null)
+        {
+            try
+            {
+                IsBusy = true;
+                action?.Invoke();
+                if (!string.IsNullOrEmpty(successMessage))
+                    AppendLog(successMessage);
+                onSuccess?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Error: {ex.Message}");
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        // ---------------------------
+        // Repo / Branch / File Operations
+        // ---------------------------
         private void ExecuteBrowseFolder()
         {
             using var dlg = new FolderBrowserDialog
@@ -184,202 +195,172 @@ namespace GitGUI.ViewModels
             if (dlg.ShowDialog() == DialogResult.OK)
                 RepoPath = dlg.SelectedPath;
         }
-
-        private void ExecuteOpenRepo()
+        private void ExecuteOpenRepo() => ExecuteAction(() =>
         {
-            try
-            {
-                bool existed = _git.OpenRepository(RepoPath);
-                AppendLog(existed
-                    ? $"Opened existing repo at '{RepoPath}'."
-                    : $"No repo here, you may want to Create.");
-                ExecuteLoadCommits();
-                ExecuteLoadBranches();
-                ExecuteRefreshChanges();
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"Error opening repo: {ex.Message}");
-            }
-        }
-
-        private void ExecuteCreateRepo()
-        {
-            try
-            {
-                _git.CreateRepository(RepoPath);
-                AppendLog($"Created (or opened) repo at '{RepoPath}'.");
-                ExecuteLoadCommits();
-                ExecuteLoadBranches();
-                ExecuteRefreshChanges();
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"Error creating repo: {ex.Message}");
-            }
-        }
-
-        private void ExecuteLoadCommits()
-        {
-            Commits.Clear();
-            try
-            {
-                foreach (var commit in _git.GetCommitLog())
-                    Commits.Add(commit);
-
-                AppendLog($"Loaded {Commits.Count} commits.");
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"Error loading commits: {ex.Message}");
-            }
-        }
-
-        private void ExecuteLoadBranches()
-        {
-            Branches.Clear();
-            foreach (var b in _git.GetBranches())
-                Branches.Add(b);
-            var current = Branches.FirstOrDefault(b => b.IsCurrent);
-            CurrentBranch = current?.Name ?? "<none>";
-            AppendLog($"Found {Branches.Count} branches. Current: {CurrentBranch}");
-        }
-
-        private void ExecuteCheckoutBranch()
-        {
-            if (SelectedBranch == null) return;
-            try
-            {
-                _git.CheckoutBranch(SelectedBranch.Name);
-                AppendLog($"Checked out branch '{SelectedBranch.Name}'.");
-                ExecuteLoadBranches();
-                ExecuteLoadCommits();
-                ExecuteRefreshChanges();
-            }
-            catch (Exception ex)
-            {
-                // Handle any errors (e.g., uncommitted changes)
-                AppendLog($"Error checking out branch: {ex.Message}");
-            }
-        }
-
-        private void ExecuteCreateBranch()
-        {
-            _git.CreateBranch(NewBranchName);
-            AppendLog($"Created and checked out new branch '{NewBranchName}'.");
-            NewBranchName = "";
+            var exists = _git.OpenRepository(RepoPath);
+            _git.SetRepoUserFromAuthenticatedUser(AuthenticatedUser);
+            ExecuteLoadCommits();
             ExecuteLoadBranches();
             ExecuteRefreshChanges();
-        }
+        }, $"Opened repository at {RepoPath}");
 
-        private void ExecuteMergeBranch()
+        private void ExecuteCreateRepo() => ExecuteAction(() =>
         {
-            if (SelectedBranch == null) return;
-            _git.MergeBranch(SelectedBranch.Name);
-            AppendLog($"Merged branch '{SelectedBranch.Name}' into current.");
+            _git.CreateRepository(RepoPath);
+            _git.SetRepoUserFromAuthenticatedUser(AuthenticatedUser);
+            ExecuteLoadCommits();
+            ExecuteLoadBranches();
+            ExecuteRefreshChanges();
+        }, $"Created repository at {RepoPath}");
+
+        private void ExecuteLoadCommits() => ExecuteAction(() =>
+        {
+            Commits.Clear();
+            foreach (var c in _git.GetCommitLog())
+                Commits.Add(c);
+            AppendLog($"Loaded {Commits.Count} commits.");
+        });
+
+        private void ExecuteLoadBranches() => ExecuteAction(() =>
+        {
+            Branches.Clear();
+            foreach (var b in _git.GetBranches()) Branches.Add(b);
+            var current = Branches.FirstOrDefault(b => b.IsCurrent);
+            CurrentBranch = current?.Name ?? "<none>";
+        });
+
+        private void ExecuteCheckoutBranch() => ExecuteAction(() =>
+        {
+            _git.CheckoutBranch(SelectedBranch.Name);
+            // Update CurrentBranch after successful checkout
+            CurrentBranch = (_git as GitLibService)?.CurrentBranchName ?? SelectedBranch.Name.Replace("origin/", "");
+            // Optionally refresh branches/commits
             ExecuteLoadBranches();
             ExecuteLoadCommits();
-        }
+            ExecuteRefreshChanges();
+        },
+        $"Checked out {SelectedBranch?.Name}");
 
-        private void ExecuteStageFile()
+        private void ExecuteCreateBranch() => ExecuteAction(() =>
+        {
+            _git.CreateBranch(NewBranchName);
+            CurrentBranch = NewBranchName;            // New branch is now current
+            NewBranchName = "";                        // Clear the input
+            ExecuteLoadBranches();                     // Refresh branch list
+            ExecuteLoadCommits();                      // Refresh commits
+            ExecuteRefreshChanges();                   // Refresh staged/unstaged changes
+        }, $"Created branch {CurrentBranch}");
+
+        // Merge the selected branch into current
+        private void ExecuteMergeBranch() => ExecuteAction(() =>
+        {
+            if (SelectedBranch != null)
+            {
+                _git.MergeBranch(SelectedBranch.Name);
+                ExecuteLoadBranches();                 // Refresh branch list
+                ExecuteLoadCommits();                  // Refresh commits
+                ExecuteRefreshChanges();               // Refresh staged/unstaged changes
+            }
+        }, $"Merged branch {SelectedBranch?.Name}");
+
+        // Stage the selected file
+        private void ExecuteStageFile() => ExecuteAction(() =>
         {
             if (SelectedChange != null)
-            {
-                try
-                {
-                    _git.StageFile(SelectedChange.FilePath);  // Stage the file
-                    AppendLog($"Staged file: {SelectedChange.FilePath}");
+                _git.StageFile(SelectedChange.FilePath);
+            ExecuteRefreshChanges();                   // Refresh staged/unstaged changes
+        }, SelectedChange != null ? $"Staged {SelectedChange.FilePath}" : null);
 
-                    // Refresh the changes to reflect the updated state
-                    ExecuteRefreshChanges();  // Refresh the staged and unstaged lists
-                }
-                catch (Exception ex)
-                {
-                    AppendLog($"Error staging file: {ex.Message}");
-                }
-            }
-        }
-
-        // Unstage a file
-        private void ExecuteUnstageFile()
+        // Unstage the selected file
+        private void ExecuteUnstageFile() => ExecuteAction(() =>
         {
             if (SelectedChange != null)
-            {
-                try
-                {
-                    _git.UnstageFile(SelectedChange.FilePath);  // Unstage the file
-                    AppendLog($"Unstaged file: {SelectedChange.FilePath}");
+                _git.UnstageFile(SelectedChange.FilePath);
+            ExecuteRefreshChanges();                   // Refresh staged/unstaged changes
+        }, SelectedChange != null ? $"Unstaged {SelectedChange.FilePath}" : null);
 
-                    // Refresh the changes to reflect the updated state
-                    ExecuteRefreshChanges();  // Refresh the staged and unstaged lists
-                }
-                catch (Exception ex)
-                {
-                    AppendLog($"Error unstaging file: {ex.Message}");
-                }
-            }
-        }
-
-        private void ExecuteCommit()
+        // Commit the current message
+        private void ExecuteCommit() => ExecuteAction(() =>
         {
-            try
-            {
-                _git.Commit(CommitMessage);
-                AppendLog($"Committed: {CommitMessage}");
-
-                // Clear the message box
-                CommitMessage = string.Empty;
-
-                // Refresh both commits list and changes list
-                ExecuteLoadCommits();
-                ExecuteRefreshChanges();
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"Error committing: {ex.Message}");
-            }
-        }
-
-        private void ExecuteRefreshChanges()
+            _git.Commit(CommitMessage);
+            CommitMessage = "";                         // Clear commit box
+            ExecuteLoadCommits();                       // Refresh commits
+            ExecuteRefreshChanges();                    // Refresh staged/unstaged changes
+        }, $"Committed: {CommitMessage}",
+            () => CommitMessage = "");
+        private void ExecuteRefreshChanges() => ExecuteAction(() =>
         {
             StagedChanges.Clear();
             UnstagedChanges.Clear();
+            var (staged, unstaged) = _git.GetChanges();
+            foreach (var s in staged) StagedChanges.Add(s);
+            foreach (var u in unstaged) UnstagedChanges.Add(u);
+        });
+
+        // ---------------------------
+        // GitHub Operations
+        // ---------------------------
+        private async void ExecuteCloneRepo()
+        {
+            if (AuthenticatedUser == null || string.IsNullOrWhiteSpace(AuthenticatedUser.AccessToken))
+            {
+                AppendLog("Cannot clone: not authenticated with GitHub.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(SourceUrl))
+            {
+                AppendLog("Source URL is empty.");
+                return;
+            }
+
+            // Ask user for destination folder
+            string? parentDir = null;
+            using (var dlg = new FolderBrowserDialog
+            {
+                Description = "Select a folder to place the new repository subfolder in",
+                ShowNewFolderButton = true
+            })
+            {
+                if (dlg.ShowDialog() == DialogResult.OK)
+                    parentDir = dlg.SelectedPath;
+            }
+
+            if (string.IsNullOrWhiteSpace(parentDir))
+            {
+                AppendLog("Clone cancelled: no destination folder selected.");
+                return;
+            }
+
+            IsBusy = true;
+            AppendLog($"Cloning {SourceUrl} into {parentDir}...");
 
             try
             {
-                var (stagedChanges, unstagedChanges) = _git.GetChanges();
-                foreach (var change in stagedChanges)
-                    StagedChanges.Add(change);
-                foreach (var change in unstagedChanges)
-                    UnstagedChanges.Add(change);
+                // Run cloning on a background thread to avoid freezing UI
+                await Task.Run(() =>
+                {
+                    _git.CloneRepository(SourceUrl, parentDir, AuthenticatedUser);
+                });
 
-                AppendLog($"Found {StagedChanges.Count} staged changes and {UnstagedChanges.Count} unstaged changes.");
+                AppendLog($"Successfully cloned {SourceUrl} to {parentDir}.");
+
+                // Refresh branches, commits, and changes after cloning
+                ExecuteLoadBranches();
+                ExecuteLoadCommits();
+                ExecuteRefreshChanges();
             }
             catch (Exception ex)
             {
-                AppendLog($"Error fetching changes: {ex.Message}");
+                AppendLog($"Error cloning repository: {ex.Message}");
             }
-        }
-
-        private void AppendLog(string message)
-        {
-            var timestamp = DateTime.Now.ToString("HH:mm:ss");
-            var logEntry = $"{timestamp} – {message}{Environment.NewLine}";
-
-            // If adding this entry would exceed the maximum length, trim the log
-            if (OutputLog.Length + logEntry.Length > MaxLogLength)
+            finally
             {
-                var lines = OutputLog.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-                var trimmedLines = lines.Skip(lines.Length - MaxLogLines).ToArray();
-                OutputLog = string.Join(Environment.NewLine, trimmedLines) + Environment.NewLine;
+                IsBusy = false;
             }
-
-            OutputLog += logEntry;
         }
 
-        protected void OnPropertyChanged([CallerMemberName] string? name = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-        }
+        private void ExecutePullCurrentBranch() => ExecuteAction(() => _git.PullCurrentBranch(RepoPath, AuthenticatedUser), "Pulled current branch");
+        private void ExecutePushCurrentBranch() => ExecuteAction(() => _git.PushCurrentBranch(RepoPath, AuthenticatedUser), "Pushed current branch");
     }
 }
