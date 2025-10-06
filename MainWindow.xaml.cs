@@ -1,4 +1,4 @@
-﻿using System.Windows;
+﻿using Keysight.Ccl.Wsl.UI;
 using System.Windows.Controls;
 
 namespace GitGUI
@@ -6,7 +6,7 @@ namespace GitGUI
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class MainWindow : WslMainWindow
     {
         public MainWindow()
         {

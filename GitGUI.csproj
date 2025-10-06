@@ -15,12 +15,18 @@
 
   <ItemGroup>
     <PackageReference Include="LibGit2Sharp" Version="0.31.0" />
+    <PackageReference Include="MahApps.Metro" Version="2.4.11" />
     <PackageReference Include="MaterialDesignColors" Version="5.2.1" />
     <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Owin" Version="9.0.8" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.Owin" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
     <PackageReference Include="Microsoft.Owin.Security.OAuth" Version="4.2.3" />
     <PackageReference Include="OpenTAP" Version="9.29.1" />
+	<Reference Include="Keysight.Ccl.Wsl">
+		<HintPath>libs\Keysight.Ccl.Wsl.6.6.0.0\Keysight.Ccl.Wsl.dll</HintPath>
+		<Private>true</Private>
+	</Reference>
+	<OpenTapPackageReference Include="WPF Controls" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,51 @@
+﻿using GitGUI.Models;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
+
+namespace GitGUI.Services
+{
+    public sealed class GitHubAuthService
+    {
+        private readonly IGitCredentialProvider _gcm;
+        private static readonly HttpClient _http = new HttpClient();
+
+        public GitHubAuthService(IGitCredentialProvider gcm) { _gcm = gcm; }
+
+        /// One-time sign-in via GCM; returns a token usable for both API and Git.
+        public async Task<(string Username, string Token)> SignInAsync()
+        {
+            // Ask for a host-wide github.com token
+            var creds = _gcm.GetForUrl("https://github.com/");
+            // Optionally persist immediately (but we also store after successful Git ops)
+            _gcm.StoreForHost(creds.Username, creds.Secret);
+
+            // Verify token by calling the user API
+            _http.DefaultRequestHeaders.Clear();
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("WPF-GitGUI-App");
+            _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", creds.Secret);
+
+            var res = await _http.GetAsync("https://api.github.com/user");
+            res.EnsureSuccessStatusCode(); // throws if token invalid/SSO unauthorized
+
+            return (creds.Username, creds.Secret);
+        }
+
+        public async Task<GitHubUser> GetCurrentUserAsync(string token)
+        {
+            _http.DefaultRequestHeaders.Clear();
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("WPF-GitGUI-App");
+            _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var res = await _http.GetAsync("https://api.github.com/user");
+            res.EnsureSuccessStatusCode();
+            var json = await res.Content.ReadAsStringAsync();
+
+            var user = JsonSerializer.Deserialize<GitHubUser>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            user.AccessToken = token; // keep for API usage
+            return user;
+        }
+    }
+}

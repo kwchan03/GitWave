@@ -1,8 +1,12 @@
 ﻿using GitGUI.Core;
 using GitGUI.Models;
 using GitGUI.Services;
+using LibGit2Sharp;
+using OpenTap;
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
+using YourApp.Adapters;
 
 namespace GitGUI.ViewModels
 {
@@ -88,6 +92,7 @@ namespace GitGUI.ViewModels
         public ICommand CloneRepoCommand { get; }
         public ICommand PullCommand { get; }
         public ICommand PushCommand { get; }
+        public ICommand ShowCommand { get; }
 
         // ---------------------------
         // Constructor
@@ -132,6 +137,9 @@ namespace GitGUI.ViewModels
 
             PushCommand = new RelayCommand(_ => ExecutePushCurrentBranch(), _ =>
                 !string.IsNullOrWhiteSpace(RepoPath) && AuthenticatedUser != null);
+
+            ShowCommand = new RelayCommand(_ => ExecuteShowDiff(), _ => SelectedChange != null);
+
         }
 
         // ---------------------------
@@ -362,5 +370,78 @@ namespace GitGUI.ViewModels
 
         private void ExecutePullCurrentBranch() => ExecuteAction(() => _git.PullCurrentBranch(RepoPath, AuthenticatedUser), "Pulled current branch");
         private void ExecutePushCurrentBranch() => ExecuteAction(() => _git.PushCurrentBranch(RepoPath, AuthenticatedUser), "Pushed current branch");
+
+        private void ExecuteShowDiff()
+        {
+            if (SelectedChange == null)
+            {
+                AppendLog("No file selected.");
+                return;
+            }
+
+            // ✅ Only allow .TapPlan files
+            if (!SelectedChange.FilePath.EndsWith(".TapPlan", StringComparison.OrdinalIgnoreCase))
+            {
+                AppendLog("Selected file is not a TestPlan (.TapPlan).");
+                System.Windows.MessageBox.Show("Diff Viewer currently supports only .TapPlan files.",
+                                "Unsupported File Type",
+                                MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                var rel = SelectedChange.FilePath.Replace('\\', '/').TrimStart('/');
+                var repoPath = RepoPath;
+
+                TestPlan? before = null;
+                TestPlan? after = null;
+
+                using var repo = new Repository(repoPath);
+
+                // ✅ Smart logic for which sides to compare
+                if (SelectedChange.IsStaged)
+                {
+                    // HEAD → INDEX
+                    before = GitHelper.GetTestPlanFromHEAD(repo, rel);
+                    after = GitHelper.GetTestPlanFromIndex(repo, rel)
+                         ?? GitHelper.GetTestPlanFromWorkingDirectory(repo, rel);
+                    AppendLog($"Diff (HEAD → INDEX): {rel}");
+                }
+                else
+                {
+                    // INDEX → WORKDIR
+                    before = GitHelper.GetTestPlanFromIndex(repo, rel)
+                         ?? GitHelper.GetTestPlanFromHEAD(repo, rel);
+                    after = GitHelper.GetTestPlanFromWorkingDirectory(repo, rel);
+                    AppendLog($"Diff (INDEX → WORKDIR): {rel}");
+                }
+
+                if (before == null && after == null)
+                {
+                    AppendLog("Unable to load either side for diff.");
+                    System.Windows.MessageBox.Show("Unable to load either side for diff.\nCheck plugin discovery or file path.",
+                                    "Diff Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // Compute semantic diff
+                var diffs = TestPlanDiffService.ComparePlans(before, after);
+                var rows = DiffUiAdapter.BuildRows(diffs, onlyChangedProps: true);
+
+                // Popup window for side-by-side diff
+                var vm = new DiffViewerViewModel(rows, $"Diff: {SelectedChange.FilePath}");
+                var win = new GitGUI.Controls.DiffViewerWindow(vm)
+                {
+                    Owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
+                };
+                win.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                AppendLog("Diff error: " + ex.Message);
+                System.Windows.MessageBox.Show("Diff failed:\n" + ex, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
     }
 }

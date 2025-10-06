@@ -8,55 +8,56 @@ namespace GitGUI.Services
     {
         public GitCredentials GetForUrl(string httpsRemoteUrl)
         {
-            if (string.IsNullOrWhiteSpace(httpsRemoteUrl))
-                throw new ArgumentException("Remote URL is required.", nameof(httpsRemoteUrl));
-
             var uri = new Uri(httpsRemoteUrl);
-            if (!string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Only https://github.com/* is supported by this provider.");
+            if (!uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ||
+                !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Only https://github.com/* is supported.");
 
-            // Standard git-credential protocol input
-            var input = $"protocol=https\nhost=github.com\npath={uri.AbsolutePath.TrimStart('/')}\n\n";
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = "git",
-                Arguments = "credential-manager get",
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var p = Process.Start(psi) ?? throw new InvalidOperationException(
-                "Failed to start 'git credential-manager'. Is Git Credential Manager installed?");
-            p.StandardInput.Write(input);
-            p.StandardInput.Close();
-
-            var stdout = p.StandardOutput.ReadToEnd();
-            var stderr = p.StandardError.ReadToEnd();
-            p.WaitForExit();
-
-            if (p.ExitCode != 0)
-                throw new InvalidOperationException($"GCM error (exit {p.ExitCode}). Details: {stderr}");
+            // Host-wide request (no path) so one login covers all repos
+            var input = "protocol=https\nhost=github.com\n\n";
+            var (exit, stdout, stderr) = Run("git", "credential-manager get", input);
+            if (exit != 0) throw new InvalidOperationException($"GCM get failed: {stderr}");
 
             string? user = null, token = null;
             foreach (var line in stdout.Split('\n'))
             {
                 var i = line.IndexOf('=');
                 if (i <= 0) continue;
-                var key = line[..i].Trim();
-                var val = line[(i + 1)..].Trim();
-                if (key.Equals("username", StringComparison.OrdinalIgnoreCase)) user = val;
-                if (key.Equals("password", StringComparison.OrdinalIgnoreCase)) token = val; // token (PAT-like)
+                var k = line[..i].Trim(); var v = line[(i + 1)..].Trim();
+                if (k.Equals("username", StringComparison.OrdinalIgnoreCase)) user = v;
+                if (k.Equals("password", StringComparison.OrdinalIgnoreCase)) token = v;
             }
-
             if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(token))
-                throw new InvalidOperationException("GCM returned no username/token. Sign in when prompted, then retry.");
+                throw new InvalidOperationException("GCM returned no username/token. Complete the sign-in when prompted, then retry.");
 
             return new GitCredentials(user!, token!);
+        }
+
+        public void StoreForHost(string username, string token)
+        {
+            var input = $"protocol=https\nhost=github.com\nusername={username}\npassword={token}\n\n";
+            var (exit, _, stderr) = Run("git", "credential-manager store", input);
+            if (exit != 0) throw new InvalidOperationException($"GCM store failed: {stderr}");
+        }
+
+        private static (int exit, string stdout, string stderr) Run(string file, string args, string? stdin = null)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = file,
+                Arguments = args,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var p = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {file} {args}");
+            if (stdin != null) { p.StandardInput.Write(stdin); p.StandardInput.Close(); }
+            var outText = p.StandardOutput.ReadToEnd();
+            var errText = p.StandardError.ReadToEnd();
+            p.WaitForExit();
+            return (p.ExitCode, outText, errText);
         }
     }
 }

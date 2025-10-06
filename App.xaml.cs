@@ -2,6 +2,7 @@
 using GitGUI.Pages;
 using GitGUI.Services;
 using GitGUI.ViewModels;
+using Keysight.Ccl.Wsl.UI;
 using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
 
@@ -13,10 +14,17 @@ namespace GitGUI
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            // 0) Initialize WSL UX (themes/skins/fonts) before any window is shown
+            UXManager.Initialize("System");
+            UXManager.ColorScheme = "CaranuLight";
+            Keysight.Ccl.Wsl.UI.Managers.SkinManager.Instance.SkinFragment("CaranuDark", false);
+
             var services = new ServiceCollection();
 
             // 1) Register the GCM credential provider
+            // Auth & Git credentials via GCM
             services.AddSingleton<IGitCredentialProvider, GcmCredentialProvider>();
+            services.AddSingleton<GitHubAuthService>();
 
             // 2) Register GitLibService with the provider (factory so DI passes the provider)
             services.AddSingleton<IGitService>(sp =>
@@ -48,6 +56,12 @@ namespace GitGUI
             // Navigate to LoginPage first
             var loginPage = Services.GetRequiredService<LoginPage>();
             mainWindow.NavigateTo(loginPage);
+
+            //string testPlanPath = @"C:\Users\chank\Documents\UM\Y3S2\WIA3002 ACADEMIC PROJECT I\TestGit\TestPlan.TapPlan";
+            //string logPath = @"C:\Users\chank\Documents\UM\Y3S2\WIA3002 ACADEMIC PROJECT I\TestGit\TestPlanDump.txt";
+
+            //TestPlanInspector.Run(testPlanPath);
+            //Shutdown();
 
             base.OnStartup(e);
         }
