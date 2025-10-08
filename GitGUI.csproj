@@ -22,6 +22,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
     <PackageReference Include="Microsoft.Owin.Security.OAuth" Version="4.2.3" />
     <PackageReference Include="OpenTAP" Version="9.29.1" />
+    <Reference Include="Editor">
+      <HintPath>libs\Editor.dll</HintPath>
+    </Reference>
 	<Reference Include="Keysight.Ccl.Wsl">
 		<HintPath>libs\Keysight.Ccl.Wsl.6.6.0.0\Keysight.Ccl.Wsl.dll</HintPath>
 		<Private>true</Private>

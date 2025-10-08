@@ -1,4 +1,5 @@
-﻿using GitGUI.Core;
+﻿using GitGUI.Controls;
+using GitGUI.Core;
 using GitGUI.Models;
 using GitGUI.Services;
 using LibGit2Sharp;
@@ -6,7 +7,6 @@ using OpenTap;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
-using YourApp.Adapters;
 
 namespace GitGUI.ViewModels
 {
@@ -427,14 +427,13 @@ namespace GitGUI.ViewModels
 
                 // Compute semantic diff
                 var diffs = TestPlanDiffService.ComparePlans(before, after);
-                var rows = DiffUiAdapter.BuildRows(diffs, onlyChangedProps: true);
 
-                // Popup window for side-by-side diff
-                var vm = new DiffViewerViewModel(rows, $"Diff: {SelectedChange.FilePath}");
-                var win = new GitGUI.Controls.DiffViewerWindow(vm)
-                {
-                    Owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
-                };
+                var vm = new DiffViewerTreeViewModel();
+                vm.Load(before, after);
+                System.Diagnostics.Debug.WriteLine($"Before count: {vm.BeforeRoots.Count}, After count: {vm.AfterRoots.Count}");
+
+                // show
+                var win = new DiffViewerWindow(vm) { Owner = System.Windows.Application.Current.MainWindow };
                 win.ShowDialog();
             }
             catch (Exception ex)

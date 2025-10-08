@@ -96,7 +96,7 @@ namespace GitGUI.Services
             var typeName = step.GetType().FullName ?? step.GetType().Name;
 
             w.WriteLine($"{indent}- Step: {step.Name}  [{typeName}]");
-            w.WriteLine($"{indent}  Path: {pathKey}");
+            w.WriteLine($"{indent}  Id: {pathKey}");
 
             try
             {

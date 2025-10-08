@@ -1,4 +1,4 @@
-﻿using GitGUI.Models;
+﻿using GitGUI.ViewModels;
 using System.Windows;
 
 namespace GitGUI.Controls
@@ -8,7 +8,7 @@ namespace GitGUI.Controls
     /// </summary>
     public partial class DiffViewerWindow : Window
     {
-        public DiffViewerWindow(DiffViewerViewModel vm)
+        public DiffViewerWindow(DiffViewerTreeViewModel vm)
         {
             InitializeComponent();
             DataContext = vm;
