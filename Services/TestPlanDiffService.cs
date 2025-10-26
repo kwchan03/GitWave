@@ -23,191 +23,115 @@ namespace GitGUI.Services
 
     public static class TestPlanDiffService
     {
-        // Compare two TestPlans using annotations (semantic diff)
+        // Cache to avoid re-allocating per member
+        private static readonly ITypeData ResourceType = TypeData.FromType(typeof(IResource));
+
+        // ---------- Public API ----------
         public static List<TestStepDiff> ComparePlans(TestPlan? before, TestPlan? after)
         {
-            var diffs = new List<TestStepDiff>();
+            // Maps by Id for O(1) lookup
             var beforeMap = BuildStepMap(before);
             var afterMap = BuildStepMap(after);
 
-            var allIds = new HashSet<string>(beforeMap.Keys);
-            allIds.UnionWith(afterMap.Keys);
+            var diffs = new List<TestStepDiff>();
 
-            foreach (var id in allIds)
+            // 1) Walk the AFTER plan (keeps UI order). Emit Added/Modified/Unchanged.
+            if (after != null)
             {
-                var hasBefore = beforeMap.TryGetValue(id, out var b);
-                var hasAfter = afterMap.TryGetValue(id, out var a);
-
-                if (!hasBefore && hasAfter)
+                foreach (var aStep in Flatten(after.Steps))
                 {
-                    // ADDED
-                    diffs.Add(new TestStepDiff
+                    var id = GetId(aStep);
+                    var hasBefore = beforeMap.TryGetValue(id, out var bStep);
+                    if (!hasBefore)
                     {
-                        Id = id,
-                        DisplayName = FriendlyName(a!.Step),
-                        Before = null,
-                        After = a.Step,
-                        Kind = StepChangeKind.Added,
-                        PropertyChanges = EnumerateProps(a.Step)
-                            .Select(p => new PropertyChange { Name = p.Label, Before = null, After = p.Value })
-                            .ToList()
-                    });
-                }
-                else if (hasBefore && !hasAfter)
-                {
-                    // REMOVED
-                    diffs.Add(new TestStepDiff
+                        // ADDED
+                        diffs.Add(new TestStepDiff
+                        {
+                            Id = id,
+                            DisplayName = FriendlyName(aStep),
+                            Before = null,
+                            After = aStep,
+                            Kind = StepChangeKind.Added,
+                            PropertyChanges = EnumerateProps(aStep)
+                                .Select(p => new PropertyChange { Name = p.Label, Before = null, After = p.Value })
+                                .ToList()
+                        });
+                    }
+                    else
                     {
-                        Id = id,
-                        DisplayName = FriendlyName(b!.Step),
-                        Before = b.Step,
-                        After = null,
-                        Kind = StepChangeKind.Removed,
-                        PropertyChanges = EnumerateProps(b.Step)
-                            .Select(p => new PropertyChange { Name = p.Label, Before = p.Value, After = null })
-                            .ToList()
-                    });
-                }
-                else if (hasBefore && hasAfter)
-                {
-                    // EXIST IN BOTH → check property changes
-                    var changes = DiffStepProperties(b!.Step, a!.Step);
-                    diffs.Add(new TestStepDiff
-                    {
-                        Id = id,
-                        DisplayName = FriendlyName(a.Step),
-                        Before = b.Step,
-                        After = a.Step,
-                        Kind = changes.Count == 0 ? StepChangeKind.Unchanged : StepChangeKind.Modified,
-                        PropertyChanges = changes
-                    });
+                        // EXISTS IN BOTH → compare properties
+                        var changes = DiffStepProperties(bStep!, aStep);
+                        diffs.Add(new TestStepDiff
+                        {
+                            Id = id,
+                            DisplayName = FriendlyName(aStep),
+                            Before = bStep,
+                            After = aStep,
+                            Kind = changes.Count == 0 ? StepChangeKind.Unchanged : StepChangeKind.Modified,
+                            PropertyChanges = changes
+                        });
+                    }
                 }
             }
 
-            // Preserve AFTER test plan order (natural traversal)
-            var order = BuildOrderMap(after);
-            return diffs
-                .OrderBy(d => order.TryGetValue(d.Id, out var idx) ? idx : int.MaxValue)
-                .ToList();
+            // 2) Any step in BEFORE not present in AFTER → REMOVED (preserve BEFORE order for these)
+            if (before != null)
+            {
+                var afterIds = new HashSet<string>(afterMap.Keys, StringComparer.Ordinal);
+                foreach (var bStep in Flatten(before.Steps))
+                {
+                    var id = GetId(bStep);
+                    if (!afterIds.Contains(id))
+                    {
+                        diffs.Add(new TestStepDiff
+                        {
+                            Id = id,
+                            DisplayName = FriendlyName(bStep),
+                            Before = bStep,
+                            After = null,
+                            Kind = StepChangeKind.Removed,
+                            PropertyChanges = EnumerateProps(bStep)
+                                .Select(p => new PropertyChange { Name = p.Label, Before = p.Value, After = null })
+                                .ToList()
+                        });
+                    }
+                }
+            }
+
+            return diffs;
         }
 
-        // Build map of step GUIDs to structure (flattened traversal)
-        private sealed class StepEntry
+        // ---------- Helpers: traversal & maps ----------
+        private static IEnumerable<ITestStep> Flatten(TestStepList roots)
         {
-            public ITestStep Step { get; init; } = default!;
-        }
-
-        private static Dictionary<string, StepEntry> BuildStepMap(TestPlan? plan)
-        {
-            var map = new Dictionary<string, StepEntry>(StringComparer.Ordinal);
-            if (plan == null) return map;
-
-            var stack = new Stack<ITestStep>(plan.Steps.Reverse());
+            var stack = new Stack<ITestStep>(Enumerable.Reverse(roots)); // preorder
             while (stack.Count > 0)
             {
-                var step = stack.Pop();
-                var id = step.Id != Guid.Empty ? step.Id.ToString("D") : Guid.NewGuid().ToString("D");
-                map[id] = new StepEntry { Step = step };
+                var s = stack.Pop();
+                yield return s;
 
-                foreach (var child in step.ChildTestSteps.Reverse())
-                    stack.Push(child);
+                // push children in reverse to visit in natural order
+                for (int i = s.ChildTestSteps.Count - 1; i >= 0; i--)
+                    stack.Push(s.ChildTestSteps[i]);
             }
+        }
+
+        private static Dictionary<string, ITestStep> BuildStepMap(TestPlan? plan)
+        {
+            var map = new Dictionary<string, ITestStep>(StringComparer.Ordinal);
+            if (plan == null) return map;
+
+            foreach (var s in Flatten(plan.Steps))
+                map[GetId(s)] = s;
+
             return map;
         }
 
-        // Record preorder sequence index for after plan
-        private static Dictionary<string, int> BuildOrderMap(TestPlan? plan)
+        private static string GetId(ITestStep s)
         {
-            var order = new Dictionary<string, int>(StringComparer.Ordinal);
-            if (plan == null) return order;
-
-            int index = 0;
-            void Walk(TestStepList steps)
-            {
-                foreach (var s in steps)
-                {
-                    var id = s.Id != Guid.Empty ? s.Id.ToString("D") : Guid.NewGuid().ToString("D");
-                    order[id] = index++;
-                    Walk(s.ChildTestSteps);
-                }
-            }
-            Walk(plan.Steps);
-            return order;
-        }
-
-        // -----------------------------------------------
-        // Property-level diff logic (same as tester class)
-        // -----------------------------------------------
-        private sealed record AnnotatedProp(string Key, string Label, object? Value);
-
-        private static IEnumerable<AnnotatedProp> EnumerateProps(object obj)
-        {
-            var ann = AnnotationCollection.Annotate(obj);
-            foreach (var x in ann?.Get<IMembersAnnotation>()?.Members ?? Array.Empty<AnnotationCollection>())
-            {
-                var member = x.Get<IMemberAnnotation>()?.Member;
-                if (member == null) continue;
-                if (!FilterMemberLikeTui(member)) continue;
-
-                var label = x.Get<DisplayAttribute>()?.Name ?? member.Name;
-                object? value =
-                    (object?)x.Get<IStringReadOnlyValueAnnotation>()?.Value ??
-                    (object?)x.Get<IStringValueAnnotation>()?.Value ??
-                    x.Get<IObjectValueAnnotation>()?.Value;
-
-                yield return new AnnotatedProp(member.Name, label, value);
-            }
-        }
-
-        private static bool FilterMemberLikeTui(IMemberData member)
-        {
-            var resourceTypeData = TypeData.FromType(typeof(IResource));
-            if (member.DeclaringType.DescendsTo(resourceTypeData) && member.Name == nameof(Resource.Name))
-                return true;
-
-            var browsable = member.GetAttribute<BrowsableAttribute>();
-            if (browsable is { Browsable: false }) return false;
-
-            if (member.HasAttribute<OutputAttribute>()) return false;
-            bool xmlIgnored = member.Attributes.Any(a => a is System.Xml.Serialization.XmlIgnoreAttribute);
-            if (xmlIgnored) return false;
-
-            return member.Writable;
-        }
-
-        private static List<PropertyChange> DiffStepProperties(ITestStep before, ITestStep after)
-        {
-            var leftList = EnumerateProps(before).ToList();
-            var rightList = EnumerateProps(after).ToList();
-
-            var L = leftList.ToDictionary(p => p.Key, p => p, StringComparer.Ordinal);
-            var R = rightList.ToDictionary(p => p.Key, p => p, StringComparer.Ordinal);
-
-            var keys = new HashSet<string>(L.Keys, StringComparer.Ordinal);
-            keys.UnionWith(R.Keys);
-
-            var changes = new List<PropertyChange>();
-            foreach (var k in keys.OrderBy(x => x, StringComparer.Ordinal))
-            {
-                L.TryGetValue(k, out var l);
-                R.TryGetValue(k, out var r);
-
-                var label = l?.Label ?? r?.Label ?? k;
-                var lv = l?.Value;
-                var rv = r?.Value;
-                if (!AreValuesEqual(lv, rv))
-                    changes.Add(new PropertyChange { Name = label, Before = lv, After = rv });
-            }
-            return changes;
-        }
-
-        private static bool AreValuesEqual(object? a, object? b)
-        {
-            if (ReferenceEquals(a, b)) return true;
-            if (a is null || b is null) return false;
-            if (Equals(a, b)) return true;
-            if (a is string sa && b is string sb) return string.Equals(sa, sb, StringComparison.Ordinal);
-            return false;
+            if (s.Id == Guid.Empty)
+                throw new InvalidOperationException($"Step '{s.Name}' has an empty Id. All steps should have persistent GUIDs.");
+            return s.Id.ToString("D");
         }
 
         private static string FriendlyName(ITestStep s)
@@ -215,6 +139,90 @@ namespace GitGUI.Services
             var td = TypeData.GetTypeData(s);
             var prettyType = td.GetDisplayAttribute()?.Name ?? s.GetType().Name;
             return $"{prettyType}: {s.Name}";
+        }
+
+        // ---------- Property enumeration & diff ----------
+        private sealed record AnnotatedProp(string Key, string Label, string Value);
+
+        private static IEnumerable<AnnotatedProp> EnumerateProps(object obj)
+        {
+            var ann = AnnotationCollection.Annotate(obj);
+            var members = ann?.Get<IMembersAnnotation>()?.Members ?? Array.Empty<AnnotationCollection>();
+
+            foreach (var x in members)
+            {
+                var m = x.Get<IMemberAnnotation>()?.Member;
+                if (m == null) continue;
+                if (!IsVisibleEditableLikeTui(x, m)) continue;
+
+                var label = x.Get<DisplayAttribute>()?.Name ?? m.Name;
+
+                string text =
+                    x.Get<IStringReadOnlyValueAnnotation>()?.Value
+                    ?? x.Get<IStringValueAnnotation>()?.Value
+                    ?? x.Get<IObjectValueAnnotation>()?.Value?.ToString()
+                    ?? "null";
+
+                var key = $"{m.DeclaringType?.Name}.{m.Name}";
+                yield return new AnnotatedProp(key, label, text);
+            }
+        }
+
+        // Mirrors the TUI selection; also drops [Output] to avoid duplicate "Description"
+        private static bool IsVisibleEditableLikeTui(AnnotationCollection node, IMemberData member)
+        {
+            // Allow Resource.Name
+            if (member.DeclaringType.DescendsTo(ResourceType) && member.Name == nameof(Resource.Name))
+                return true;
+
+            // Respect access visibility
+            if ((node.Get<IAccessAnnotation>()?.IsVisible ?? false) == false)
+                return false;
+
+            // Exclude "submit" button-like choices (same as TUI)
+            bool isSubmitWithChoices =
+                member.GetAttribute<SubmitAttribute>() != null &&
+                node.Get<IAvailableValuesAnnotationProxy>() != null;
+            if (isSubmitWithChoices) return false;
+
+            // TUI filter
+            var browsable = member.GetAttribute<BrowsableAttribute>();
+            if (browsable is { Browsable: false }) return false;
+            if (member.HasAttribute<OutputAttribute>()) return false; // avoid output Description
+            if (member.Attributes.Any(a => a is System.Xml.Serialization.XmlIgnoreAttribute)) return false;
+
+            return member.Writable;
+        }
+
+        private static List<PropertyChange> DiffStepProperties(ITestStep before, ITestStep after)
+        {
+            var left = EnumerateProps(before).ToDictionary(p => p.Key, p => p, StringComparer.Ordinal);
+            var right = EnumerateProps(after).ToDictionary(p => p.Key, p => p, StringComparer.Ordinal);
+
+            var keys = new HashSet<string>(left.Keys, StringComparer.Ordinal);
+            keys.UnionWith(right.Keys);
+
+            var changes = new List<PropertyChange>();
+            foreach (var k in keys.OrderBy(x => x, StringComparer.Ordinal))
+            {
+                left.TryGetValue(k, out var l);
+                right.TryGetValue(k, out var r);
+
+                var label = l?.Label ?? r?.Label ?? k;
+                var lv = l?.Value ?? "null";
+                var rv = r?.Value ?? "null";
+
+                if (!string.Equals(lv, rv, StringComparison.Ordinal))
+                {
+                    changes.Add(new PropertyChange
+                    {
+                        Name = label,
+                        Before = lv,
+                        After = rv
+                    });
+                }
+            }
+            return changes;
         }
     }
 }

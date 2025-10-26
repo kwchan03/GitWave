@@ -37,7 +37,6 @@
                 </TreeView.Resources>
             </TreeView>
         </GroupBox>
-
         <Grid Grid.Column="1" Background="#DDD"/>
 
         <!-- AFTER -->

@@ -203,9 +203,9 @@ namespace GitGUI.Services
                         .Select(c => new CommitInfo
                         {
                             Sha = c.Sha,
-                            Message = c.MessageShort,
+                            MessageShort = c.MessageShort,
                             AuthorName = c.Author.Name,
-                            Date = c.Author.When.LocalDateTime
+                            AuthorWhen = c.Author.When
                         });
         }
         #endregion

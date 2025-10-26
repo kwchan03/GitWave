@@ -11,9 +11,7 @@ namespace GitGUI.Services
 {
     public static class DiffTreeBuilder
     {
-        public static (ObservableCollection<StepNode> beforeRoots,
-                       ObservableCollection<StepNode> afterRoots)
-            BuildTrees(TestPlan before, TestPlan after)
+        public static (ObservableCollection<StepNode> beforeRoots, ObservableCollection<StepNode> afterRoots) BuildTrees(TestPlan before, TestPlan after)
         {
             // ComparePlans returns List<StepDiff>
             var diffs = ComparePlans(before, after);

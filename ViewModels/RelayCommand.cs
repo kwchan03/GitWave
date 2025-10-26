@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Input;
+﻿using System.Windows.Input;
 
 namespace GitGUI.ViewModels
 {
@@ -30,6 +25,11 @@ namespace GitGUI.ViewModels
         public void Execute(object? parameter)
         {
             _execute(parameter);
+        }
+        public void RaiseCanExecuteChanged()
+        {
+            // Triggers CommandManager to raise RequerySuggested, causing the UI to requery CanExecute
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 }

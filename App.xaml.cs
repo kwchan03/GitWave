@@ -15,6 +15,8 @@ namespace GitGUI
         protected override void OnStartup(StartupEventArgs e)
         {
             // 0) Initialize WSL UX (themes/skins/fonts) before any window is shown
+            //TestPlanGrid testPlanGrid = new TestPlanGrid();
+            //testPlanGrid.InitializeComponent();
             UXManager.Initialize("System");
             UXManager.ColorScheme = "CaranuLight";
             Keysight.Ccl.Wsl.UI.Managers.SkinManager.Instance.SkinFragment("CaranuDark", false);
@@ -56,6 +58,10 @@ namespace GitGUI
             // Navigate to LoginPage first
             var loginPage = Services.GetRequiredService<LoginPage>();
             mainWindow.NavigateTo(loginPage);
+
+            //var window = new GitGUI.Pages.TestPlanView();
+            //MainWindow = window;
+            //window.Show();
 
             //string testPlanPath = @"C:\Users\chank\Documents\UM\Y3S2\WIA3002 ACADEMIC PROJECT I\TestGit\TestPlan.TapPlan";
             //string logPath = @"C:\Users\chank\Documents\UM\Y3S2\WIA3002 ACADEMIC PROJECT I\TestGit\TestPlanDump.txt";

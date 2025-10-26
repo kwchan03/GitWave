@@ -1,0 +1,25 @@
+﻿<Window x:Class="GitGUI.Pages.TestPlanView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:tapwpf="clr-namespace:Keysight.OpenTap.Wpf;assembly=Keysight.OpenTap.Wpf"
+        Title="Test Plan - Step Properties" Height="600" Width="900">
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*" />
+            <ColumnDefinition Width="3*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Left: steps -->
+        <ListBox x:Name="StepList"
+                 DisplayMemberPath="Label"
+                 SelectionChanged="StepList_SelectionChanged"
+                 BorderBrush="#DDD" BorderThickness="1"/>
+
+        <!-- Right: PropGrid shows properties from AnnotationCollection / getMembers() -->
+        <tapwpf:PropGrid x:Name="Grid"
+                         Grid.Column="1"
+                         Margin="10,0,0,0"
+                         IsShowHeaders="True"
+                         ContentEnabled="True"/>
+    </Grid>
+</Window>

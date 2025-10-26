@@ -5,6 +5,7 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:localPages="clr-namespace:GitGUI.Pages"
       xmlns:localModels="clr-namespace:GitGUI.Models"
+      xmlns:controls="clr-namespace:GitGUI.Controls"
       mc:Ignorable="d" d:DesignWidth="800"
       Title="Operation"
       Width="Auto"
@@ -28,9 +29,15 @@
         <Grid Background="White">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
+                <!-- Row 0: Header -->
                 <RowDefinition Height="Auto"/>
+                <!-- Row 1: Repository -->
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="150"/>
+                <!-- Row 2: Main content (Changes, Branch, etc.) -->
+                <RowDefinition Height="250"/>
+                <!-- Row 3: Commit Graph -->
+                <RowDefinition Height="50"/>
+                <!-- Row 4: Output Log -->
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Right" Margin="5">
@@ -96,38 +103,15 @@
                 </StackPanel>
             </GroupBox>
 
-
-
             <!-- Main Content -->
             <Grid Grid.Row="2" Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="2*"/>
                     <ColumnDefinition Width="3*"/>
                     <ColumnDefinition Width="2.5*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Commit Graph Panel -->
-                <GroupBox Header="Commit Graph" Grid.Column="0" Margin="5">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <ItemsControl x:Name="CommitGraphList">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="5">
-                                        <Ellipse Width="10" Height="10" Fill="DarkBlue" Margin="5"/>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Message}" FontWeight="Bold"/>
-                                            <TextBlock Text="{Binding Hash}" FontSize="10" Foreground="Gray"/>
-                                            <TextBlock Text="{Binding Date}" FontSize="10" Foreground="DarkGray"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </GroupBox>
-
                 <!-- File Changes Panel -->
-                <GroupBox Header="Changes" Grid.Column="1" Margin="5">
+                <GroupBox Header="Changes" Grid.Column="0" Margin="5">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -185,26 +169,50 @@
                 </GroupBox>
 
                 <!-- Commit & Branch Panel -->
-                <Grid Grid.Column="2" Margin="5">
+                <Grid Grid.Column="1" Margin="5">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="1*"/>
                         <!-- Commit box -->
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="1*"/>
                         <!-- Branch box -->
                     </Grid.RowDefinitions>
 
                     <!-- ── Commit only ──────────────── -->
                     <GroupBox Header="Commit" Grid.Row="0" Margin="0,0,0,5">
-                        <StackPanel Margin="10">
-                            <TextBlock Text="Commit Message:"/>
-                            <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" 
-                             AcceptsReturn="True" Height="60" Margin="0,5"/>
-                            <Button Content="Commit"
-                            Command="{Binding CommitCommand}"
-                            Width="100"
-                            HorizontalAlignment="Center"/>
-                        </StackPanel>
+                        <Grid Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <!-- Label -->
+                                <RowDefinition Height="*"/>
+                                <!-- TextBox -->
+                                <RowDefinition Height="Auto"/>
+                                <!-- Button -->
+                            </Grid.RowDefinitions>
+
+                            <TextBlock 
+                                Grid.Row="0" 
+                                Text="Commit Message:"/>
+
+                            <TextBox 
+                                Grid.Row="1"
+                                Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" 
+                                AcceptsReturn="True"
+                                TextWrapping="Wrap"
+                                VerticalScrollBarVisibility="Auto"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"
+                                Margin="0,5"/>
+
+                            <Button 
+                                Grid.Row="2"
+                                Content="Commit"
+                                Command="{Binding CommitCommand}"
+                                Width="100"
+                                HorizontalAlignment="Center"
+                                Margin="0,5,0,0"/>
+                        </Grid>
                     </GroupBox>
+
 
                     <!-- ── Branch management ──────────────── -->
                     <GroupBox Header="Branches" Grid.Row="1">
@@ -228,20 +236,19 @@
                                       ItemsSource="{Binding Branches}"
                                       SelectedItem="{Binding SelectedBranch}"
                                       DisplayMemberPath="Name"/>
-                                    <Button Grid.Column="1"
-                                    Content="Checkout"
-                                    Command="{Binding CheckoutBranchCommand}"
-                                    Width="80" Margin="6,0"/>
                                 </Grid>
 
                                 <!-- Merge / Delete -->
                                 <WrapPanel HorizontalAlignment="Center">
+                                    <Button Content="Checkout"
+                                    Command="{Binding CheckoutBranchCommand}"
+                                    Width="80" Margin="4"/>
                                     <Button Content="Merge"
                                     Command="{Binding MergeBranchCommand}"
-                                    Width="90" Margin="4"/>
+                                    Width="80" Margin="4"/>
                                     <Button Content="Delete"
                                     Command="{Binding DeleteBranchCommand}"
-                                    Width="90" Margin="4"/>
+                                    Width="80" Margin="4"/>
                                 </WrapPanel>
 
                                 <!-- Create new branch -->
@@ -274,8 +281,18 @@
                 </Grid>
             </Grid>
 
+            <!-- Commit Graph now full width above Output Log -->
+            <GroupBox Header="Commit Graph" Grid.Row="3" Margin="5">
+                <controls:CommitGraphView
+                    ItemsSource="{Binding Graph.Items}"
+                    SelectedItem="{Binding Graph.SelectedItem}"
+                    GraphWidth="{Binding Graph.GraphWidth}"
+                    RowHeight="28"/>
+            </GroupBox>
+
+
             <!-- Output Log -->
-            <GroupBox Header="Output Log" Grid.Row="3" Grid.ColumnSpan="2">
+            <GroupBox Header="Output Log" Grid.Row="4" Grid.ColumnSpan="2">
                 <TextBox x:Name="OutputTextBox"
                  IsReadOnly="True"
                  Text="{Binding OutputLog, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
