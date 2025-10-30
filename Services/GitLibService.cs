@@ -1,7 +1,6 @@
 ﻿using GitGUI.Core;
 using GitGUI.Models;
 using LibGit2Sharp;
-using System.Collections.ObjectModel;
 using System.IO;
 
 namespace GitGUI.Services
@@ -16,10 +15,6 @@ namespace GitGUI.Services
         {
             _gitCreds = gitCreds ?? throw new ArgumentNullException(nameof(gitCreds));
         }
-
-        public ObservableCollection<CommitInfo> Commits { get; } = new ObservableCollection<CommitInfo>();
-        public ObservableCollection<BranchInfo> Branches { get; } = new ObservableCollection<BranchInfo>();
-
 
         #region Repository Management
         public bool OpenRepository(string path)
@@ -137,6 +132,8 @@ namespace GitGUI.Services
 
         public string CurrentBranchName => _repo?.Head?.FriendlyName ?? "<none>";
 
+        public bool IsRepositoryOpen => _repo != null;
+
         public void CreateBranch(string branchName)
         {
             if (_repo == null) throw new InvalidOperationException("Repository not opened.");
@@ -208,16 +205,22 @@ namespace GitGUI.Services
                             AuthorWhen = c.Author.When
                         });
         }
+
+        public IEnumerable<Commit> FetchCommitsForGraph(int maxCount = 2000)
+        {
+            if (_repo == null) throw new InvalidOperationException("Repository not opened.");
+
+            var filter = new CommitFilter
+            {
+                IncludeReachableFrom = _repo.Branches,
+                SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time
+            };
+
+            return _repo.Commits.QueryBy(filter).Take(maxCount).ToList(); // materialize
+        }
         #endregion
 
         #region GitHub Operations
-        //public void CloneRepository(string sourceUrl, string targetPath, string oauthToken)
-        //{
-        //    var co = new CloneOptions();
-        //    co.FetchOptions.CredentialsProvider = (_url, _user, _cred) => new UsernamePasswordCredentials { Username = "oauth2", Password = oauthToken };
-        //    Repository.Clone(sourceUrl, targetPath, co);
-        //}
-
         public void CloneRepository(string sourceUrl, string parentDirectory, GitHubUser AuthenticatedUser)
         {
             if (string.IsNullOrWhiteSpace(sourceUrl))

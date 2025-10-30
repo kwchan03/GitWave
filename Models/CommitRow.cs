@@ -1,38 +1,37 @@
-﻿namespace GitGUI.Models;
+﻿// GitGUI.Models/CommitRow.cs
+using LibGit2Sharp;
 
-public class CommitRow
+namespace GitGUI.Models
 {
-    public CommitInfo Info { get; init; } = null!;
+    public class CommitRow
+    {
+        public Commit Commit { get; init; } = null!;
 
-    // Bind-friendly pass-throughs
-    public string Sha => Info.Sha;
-    public string ShortSha => Sha.Length >= 7 ? Sha[..7] : Sha;
-    public string Message => Info.MessageShort;
-    public string Author => Info.AuthorName;
-    public DateTimeOffset When => Info.AuthorWhen;
-    public IReadOnlyList<string> Parents => Info.ParentShas;
-    public IReadOnlyList<string> Refs => Info.Refs;
+        // Bind-friendly pass-throughs (safe null handling)
+        public string Sha => Commit?.Sha ?? string.Empty;
+        public string ShortSha => Sha.Length >= 7 ? Sha[..7] : Sha;
+        public string Message => Commit?.MessageShort ?? string.Empty;
+        public string Author => Commit?.Author?.Name ?? string.Empty;
+        public DateTimeOffset When => Commit?.Author?.When ?? default;
 
-    // Graph layout (UI-only)
-    public int PrimaryLane { get; set; }
-    public List<GraphSeg> Segments { get; } = new();
+        // parent SHAs (materialized list)
+        public IReadOnlyList<string> Parents => Commit?.Parents?.Select(p => p.Sha).ToArray() ?? Array.Empty<string>();
 
-    // NEW: tells the renderer there’s a commit above on the same lane
-    public bool ConnectTop { get; set; }
-}
+        // Graph layout (UI-only)
+        public int PrimaryLane { get; set; }
+        public List<GraphSeg> Segments { get; } = new();
 
-public enum SegKind { Vertical, Merge, Branch }
+        // tells the renderer there’s a commit above on the same lane
+        public bool ConnectTop { get; set; }
+    }
 
-public class GraphSeg
-{
-    public int FromLane { get; init; }
-    public int ToLane { get; init; } // same as FromLane for vertical
-    public SegKind Kind { get; init; }
-    public int ColorIndex { get; init; } // usually lane index
-}
+    public enum SegKind { Vertical, Merge, Branch }
 
-public static class CommitRowFactory
-{
-    public static List<CommitRow> From(IEnumerable<CommitInfo> commits)
-        => commits.Select(c => new CommitRow { Info = c }).ToList();
+    public class GraphSeg
+    {
+        public int FromLane { get; init; }
+        public int ToLane { get; init; } // same as FromLane for vertical
+        public SegKind Kind { get; init; }
+        public int ColorIndex { get; init; } // usually lane index
+    }
 }

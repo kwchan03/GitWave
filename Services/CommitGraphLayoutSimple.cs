@@ -67,11 +67,22 @@ namespace GitGUI.Services
                 currentRow.PrimaryLane = currentLane;
                 maxLaneUsed = Math.Max(maxLaneUsed, currentLane);
 
-                // Draw vertical lines for commits that are being continued
-                // Only draw lines for commits that have children in the rows above
+                // Draw vertical lines for commits that are being continued (pass-through lanes)
+                // Only draw lines for commits that:
+                // 1. Have children in rows above (lane is active above)
+                // 2. Will appear in rows below (lane continues below)
+                // 3. Are not the current commit
                 foreach (var kvp in laneAssignments)
                 {
-                    if (kvp.Key != currentRow.Sha && childrenMap.TryGetValue(kvp.Key, out var children))
+                    // Skip the current commit - its vertical line is handled separately below
+                    if (kvp.Key == currentRow.Sha)
+                        continue;
+
+                    // Check if this commit appears below the current row
+                    if (!commitToIndex.TryGetValue(kvp.Key, out int commitIndex) || commitIndex <= i)
+                        continue; // This commit doesn't appear below, so lane ends here
+
+                    if (childrenMap.TryGetValue(kvp.Key, out var children))
                     {
                         // Check if any of the children are in the rows above
                         bool hasChildrenAbove = false;
@@ -105,14 +116,21 @@ namespace GitGUI.Services
                     for (int childIndex = 1; childIndex < currentChildren.Count; childIndex++)
                     {
                         var childSha = currentChildren[childIndex];
-                        int branchLane = FindBranchLane(laneAssignments, currentLane);
+                        int branchLane;
 
-                        if (!laneAssignments.ContainsKey(childSha))
+                        // If the child already has a lane assignment, use it
+                        if (laneAssignments.TryGetValue(childSha, out branchLane))
                         {
+                            // Child already assigned to a lane, use that lane
+                        }
+                        else
+                        {
+                            // Find a new lane for the child
+                            branchLane = FindBranchLane(laneAssignments, currentLane);
                             laneAssignments[childSha] = branchLane;
                         }
 
-                        // Draw branch line from current commit to the new lane
+                        // Draw branch line from current commit to the child's lane
                         currentRow.Segments.Add(new GraphSeg
                         {
                             FromLane = currentLane,

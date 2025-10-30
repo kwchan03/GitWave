@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using Brushes = System.Windows.Media.Brushes;
 using Pen = System.Windows.Media.Pen;
+using Point = System.Windows.Point;
 
 namespace GitGUI.Controls
 {
@@ -12,11 +13,9 @@ namespace GitGUI.Controls
         {
             SnapsToDevicePixels = true;
             UseLayoutRounding = true;
-            _railPen.Freeze();
-            _dotPen.Freeze();
         }
 
-        // Row to render
+        // Row to render (bind this to the CommitRow instance: Row="{Binding}")
         public static readonly DependencyProperty RowProperty =
             DependencyProperty.Register(
                 nameof(Row),
@@ -39,21 +38,19 @@ namespace GitGUI.Controls
         private static readonly Pen _dotPen = new(Brushes.SlateGray, 1.0);
 
         // Pixel-aligned lane X
-        private static double AlignX(double x) => System.Math.Round(x) + 0.5;
+        private static double AlignX(double x) => Math.Round(x) + 0.5;
         private static double XForLane(int lane) => AlignX((lane + 0.5) * LaneWidth);
 
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);
             if (Row is null) return;
-            double h = RenderSize.Height; if (h <= 0) return;
+            double h = RenderSize.Height;
+            if (h <= 0) return;
 
-
-            const double LaneWidth = 14.0, DotRadius = 3.5;
-            var pen = new Pen(Brushes.SlateGray, 1.0);
-
-            double AlignX(double x) => Math.Round(x) + 0.5;
-            double X(int lane) => AlignX((lane + 0.5) * LaneWidth);
+            // local helpers (keeps consistent alignment)
+            double AlignXLocal(double x) => Math.Round(x) + 0.5;
+            double X(int lane) => AlignXLocal((lane + 0.5) * LaneWidth);
 
             double top = -1.0, bottom = h + 1.0, mid = h / 2.0;
 
@@ -65,8 +62,7 @@ namespace GitGUI.Controls
                     if (s.Kind == SegKind.Vertical)
                     {
                         var x = X(s.FromLane);
-                        // Draw full height vertical line for pass-through lanes
-                        dc.DrawLine(pen, new System.Windows.Point(x, top), new System.Windows.Point(x, bottom));
+                        dc.DrawLine(_railPen, new Point(x, top), new Point(x, bottom));
                     }
                 }
             }
@@ -80,14 +76,12 @@ namespace GitGUI.Controls
                     {
                         var x1 = X(s.FromLane);
                         var x2 = X(s.ToLane);
-                        
-                        // Draw curved merge line from current commit to merge parent
-                        DrawCurvedMergeLine(dc, pen, x1, mid, x2, bottom);
+                        DrawCurvedMergeLine(dc, _railPen, x1, mid, x2, bottom);
                     }
                 }
             }
 
-            // 2.5) Draw branch lines (curved connections from current commit to branch children)
+            // 3) Draw branch lines (curved connections from current commit to branch children)
             if (Row.Segments is { Count: > 0 })
             {
                 foreach (var s in Row.Segments)
@@ -96,59 +90,55 @@ namespace GitGUI.Controls
                     {
                         var x1 = X(s.FromLane);
                         var x2 = X(s.ToLane);
-                        
-                        // Draw curved branch line from current commit to branch child
-                        DrawCurvedBranchLine(dc, pen, x1, mid, x2, bottom);
+                        DrawCurvedBranchLine(dc, _railPen, x1, mid, x2, top);
                     }
                 }
             }
 
-            // 3) If the primary lane continues from above, connect top -> dot
+            // 4) If the primary lane continues from above, connect top -> dot
             if (Row.ConnectTop)
             {
                 var x = X(Row.PrimaryLane);
-                dc.DrawLine(pen, new System.Windows.Point(x, top), new System.Windows.Point(x, mid));
+                dc.DrawLine(_railPen, new Point(x, top), new Point(x, mid));
             }
 
-            // 4) Draw the main vertical line to the first parent (if any)
+            // 5) Draw the main vertical line to the first parent (if any)
             var parents = Row.Parents ?? Array.Empty<string>();
             if (parents.Count > 0)
             {
                 var x = X(Row.PrimaryLane);
-                dc.DrawLine(pen, new System.Windows.Point(x, mid), new System.Windows.Point(x, bottom));
+                dc.DrawLine(_railPen, new Point(x, mid), new Point(x, bottom));
             }
 
-            // 5) Draw the commit dot
+            // 6) Draw the commit dot — simplified (no refs available)
             var xDot = X(Row.PrimaryLane);
-            var dotBrush = Row.Refs?.Count > 0 ? Brushes.Orange : Brushes.White;
-            dc.DrawEllipse(dotBrush, pen, new System.Windows.Point(xDot, mid), DotRadius, DotRadius);
+
+            // Default dot style: filled white with slate-gray stroke.
+            // If you later reintroduce "is tip of branch" or similar, toggle here.
+            var dotBrush = Brushes.White;
+            dc.DrawEllipse(dotBrush, _dotPen, new Point(xDot, mid), DotRadius, DotRadius);
         }
 
         private void DrawCurvedMergeLine(DrawingContext dc, Pen pen, double x1, double y1, double x2, double y2)
         {
             try
             {
-                // Create a curved path for merge lines
                 var pathGeometry = new PathGeometry();
-                var pathFigure = new PathFigure();
-                
-                pathFigure.StartPoint = new System.Windows.Point(x1, y1);
-                
-                // Create a smooth curve using Bezier curves
-                var controlPoint1 = new System.Windows.Point(x1, y1 + (y2 - y1) * 0.3);
-                var controlPoint2 = new System.Windows.Point(x2, y1 + (y2 - y1) * 0.7);
-                
-                var bezierSegment = new BezierSegment(controlPoint1, controlPoint2, new System.Windows.Point(x2, y2), true);
+                var pathFigure = new PathFigure { StartPoint = new Point(x1, y1) };
+
+                var controlPoint1 = new Point(x1, y1 + (y2 - y1) * 0.3);
+                var controlPoint2 = new Point(x2, y1 + (y2 - y1) * 0.7);
+
+                var bezierSegment = new BezierSegment(controlPoint1, controlPoint2, new Point(x2, y2), true);
                 pathFigure.Segments.Add(bezierSegment);
-                
+
                 pathGeometry.Figures.Add(pathFigure);
                 dc.DrawGeometry(null, pen, pathGeometry);
             }
             catch (Exception ex)
             {
-                // Fallback to straight line if curve fails
                 System.Diagnostics.Debug.WriteLine($"Failed to draw curved merge line: {ex.Message}");
-                dc.DrawLine(pen, new System.Windows.Point(x1, y1), new System.Windows.Point(x2, y2));
+                dc.DrawLine(pen, new Point(x1, y1), new Point(x2, y2));
             }
         }
 
@@ -156,27 +146,23 @@ namespace GitGUI.Controls
         {
             try
             {
-                // Create a curved path for branch lines
                 var pathGeometry = new PathGeometry();
-                var pathFigure = new PathFigure();
-                
-                pathFigure.StartPoint = new System.Windows.Point(x1, y1);
-                
-                // Create a smooth curve using Bezier curves for branch lines
-                var controlPoint1 = new System.Windows.Point(x1, y1 + (y2 - y1) * 0.2);
-                var controlPoint2 = new System.Windows.Point(x2, y1 + (y2 - y1) * 0.8);
-                
-                var bezierSegment = new BezierSegment(controlPoint1, controlPoint2, new System.Windows.Point(x2, y2), true);
+                var pathFigure = new PathFigure { StartPoint = new Point(x1, y1) };
+
+                // Branch lines go upward (y2 < y1), so adjust control points for upward curve
+                var controlPoint1 = new Point(x1, y1 + (y2 - y1) * 0.3);
+                var controlPoint2 = new Point(x2, y1 + (y2 - y1) * 0.7);
+
+                var bezierSegment = new BezierSegment(controlPoint1, controlPoint2, new Point(x2, y2), true);
                 pathFigure.Segments.Add(bezierSegment);
-                
+
                 pathGeometry.Figures.Add(pathFigure);
                 dc.DrawGeometry(null, pen, pathGeometry);
             }
             catch (Exception ex)
             {
-                // Fallback to straight line if curve fails
                 System.Diagnostics.Debug.WriteLine($"Failed to draw curved branch line: {ex.Message}");
-                dc.DrawLine(pen, new System.Windows.Point(x1, y1), new System.Windows.Point(x2, y2));
+                dc.DrawLine(pen, new Point(x1, y1), new Point(x2, y2));
             }
         }
     }

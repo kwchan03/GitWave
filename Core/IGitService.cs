@@ -1,4 +1,5 @@
 ﻿using GitGUI.Models;
+using LibGit2Sharp;
 
 namespace GitGUI.Core
 {
@@ -6,7 +7,9 @@ namespace GitGUI.Core
     {
         void CreateRepository(string path);
         IEnumerable<CommitInfo> GetCommitLog(int maxCount = 50);
+        IEnumerable<Commit> FetchCommitsForGraph(int maxCount = 2000);
         bool OpenRepository(string repositoryPath);
+        bool IsRepositoryOpen { get; }
 
         IEnumerable<BranchInfo> GetBranches();
         void CheckoutBranch(string branchName);

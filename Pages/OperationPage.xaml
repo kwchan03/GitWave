@@ -34,7 +34,7 @@
                 <!-- Row 1: Repository -->
                 <RowDefinition Height="*"/>
                 <!-- Row 2: Main content (Changes, Branch, etc.) -->
-                <RowDefinition Height="250"/>
+                <RowDefinition Height="250" MaxHeight="300"/>
                 <!-- Row 3: Commit Graph -->
                 <RowDefinition Height="50"/>
                 <!-- Row 4: Output Log -->
@@ -284,10 +284,7 @@
             <!-- Commit Graph now full width above Output Log -->
             <GroupBox Header="Commit Graph" Grid.Row="3" Margin="5">
                 <controls:CommitGraphView
-                    ItemsSource="{Binding Graph.Items}"
-                    SelectedItem="{Binding Graph.SelectedItem}"
-                    GraphWidth="{Binding Graph.GraphWidth}"
-                    RowHeight="28"/>
+                    DataContext="{Binding Graph}"/>
             </GroupBox>
 
 

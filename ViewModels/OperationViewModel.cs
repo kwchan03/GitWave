@@ -44,7 +44,7 @@ namespace GitGUI.ViewModels
             get => _currentBranch;
             private set => SetProperty(ref _currentBranch, value);
         }
-
+        public CommitGraphVM Graph { get; }
 
         // ---------------------------
         // Collections
@@ -100,6 +100,7 @@ namespace GitGUI.ViewModels
         public OperationViewModel(IGitService git)
         {
             _git = git ?? throw new ArgumentNullException(nameof(git));
+            Graph = new CommitGraphVM(_git);
 
             // ---------------------------
             // Repo operations
@@ -216,7 +217,7 @@ namespace GitGUI.ViewModels
                 ExecuteRefreshChanges();
 
                 // ✅ await: load the commit graph
-                await Graph.InitializeAsync(RepoPath, branchName: null);
+                await Graph.LoadAllBranchesAsync();
                 AppendLog($"Opened repository at {RepoPath}");
             }
             catch (Exception ex) { AppendLog($"Error: {ex.Message}"); }
@@ -236,7 +237,7 @@ namespace GitGUI.ViewModels
                 ExecuteRefreshChanges();
 
                 // ✅ await
-                await Graph.InitializeAsync(RepoPath, branchName: null);
+                await Graph.LoadAllBranchesAsync();
                 AppendLog($"Created repository at {RepoPath}");
             }
             catch (Exception ex) { AppendLog($"Error: {ex.Message}"); }
@@ -271,7 +272,7 @@ namespace GitGUI.ViewModels
                 ExecuteRefreshChanges();
 
                 // ✅ await: show new branch history
-                await Graph.ChangeBranchAsync(CurrentBranch);
+                await Graph.RefreshAsync();
                 AppendLog($"Checked out {SelectedBranch?.Name}");
             }
             catch (Exception ex) { AppendLog($"Error: {ex.Message}"); }
@@ -397,7 +398,7 @@ namespace GitGUI.ViewModels
                 ExecuteLoadCommits();
                 ExecuteRefreshChanges();
 
-                await Graph.InitializeAsync(RepoPath, branchName: null);
+                await Graph.LoadAllBranchesAsync();
             }
             catch (Exception ex)
             {
@@ -504,7 +505,6 @@ namespace GitGUI.ViewModels
             }
         }
 
-        public CommitGraphVM Graph { get; } = new CommitGraphVM();
 
 
     }

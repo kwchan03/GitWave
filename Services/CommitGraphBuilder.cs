@@ -1,116 +1,160 @@
-﻿using GitGUI.Models;
+﻿// GitGUI.Services/CommitGraphBuilder.cs
+using GitGUI.Models;
+using LibGit2Sharp;
 
 namespace GitGUI.Services
 {
     public static class CommitGraphBuilder
     {
-        public static List<CommitRow> Build(IReadOnlyList<CommitInfo> commits)
+        /// <summary>
+        /// Build CommitRow list (with lanes & segments) from LibGit2Sharp.Commit objects.
+        /// </summary>
+        public static List<CommitRow> BuildFromCommits(IEnumerable<Commit> commits)
         {
-            var rows = new List<CommitRow>(commits.Count);
+            // Materialize commits (repo lifetime safety + indexing)
+            var commitList = commits.ToList();
 
-            // Active lanes by index → commit SHA (top of line)
-            var activeLanes = new List<string>();
+            // Quick index: SHA -> index in commitList (used to check "appears later")
+            var indexBySha = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (int i = 0; i < commitList.Count; i++)
+                indexBySha[commitList[i].Sha] = i;
 
-            // Color index is usually same as lane index, but you can remap later if needed
-            var laneColor = new Dictionary<int, int>();
-
-            foreach (var c in commits)
+            // Build parent -> children map (for branch-out detection)
+            var children = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            foreach (var c in commitList)
             {
-                var row = new CommitRow { Info = c };
-
-                // 1️⃣ Assign lane
-                int lane;
-                if (activeLanes.Contains(c.Sha))
+                foreach (var p in c.Parents)
                 {
-                    // Continue same lane
-                    lane = activeLanes.IndexOf(c.Sha);
-                }
-                else
-                {
-                    // Reuse first empty lane if available
-                    lane = activeLanes.IndexOf(null!);
-                    if (lane == -1)
+                    if (!children.TryGetValue(p.Sha, out var lst))
                     {
-                        lane = activeLanes.Count;
-                        activeLanes.Add(c.Sha);
-                        laneColor[lane] = lane; // color = lane index
+                        lst = new List<string>();
+                        children[p.Sha] = lst;
                     }
+                    lst.Add(c.Sha);
+                }
+            }
+
+            // Convert commits into rows (CommitRowFactory handles wrapping Commit)
+            var rows = CommitRowFactory.FromCommits(commitList);
+
+            // Active lanes state: each slot holds the SHA expected in that lane (or null if free)
+            var activeLanes = new List<string?>();
+            int? prevPrimaryLane = null;
+
+            for (int rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+            {
+                var row = rows[rowIndex];
+                var sha = row.Commit.Sha;
+                var parents = row.Parents?.ToArray() ?? Array.Empty<string>();
+
+                // 1) Find or allocate a lane for this commit
+                int laneIndex = activeLanes.IndexOf(sha);
+                if (laneIndex == -1)
+                {
+                    int free = activeLanes.IndexOf(null);
+                    if (free != -1) laneIndex = free;
                     else
                     {
-                        activeLanes[lane] = c.Sha;
+                        laneIndex = activeLanes.Count;
+                        activeLanes.Add(null); // placeholder, will set next line
                     }
+                    activeLanes[laneIndex] = sha;
                 }
 
-                row.PrimaryLane = lane;
+                row.PrimaryLane = laneIndex;
 
-                // 2️⃣ ConnectTop = true if same lane was already active above
-                row.ConnectTop = true;
-
-                // 3️⃣ Build vertical pass-through for all active lanes
-                for (int i = 0; i < activeLanes.Count; i++)
+                // 2) Vertical rails for all active lanes
+                for (int lane = 0; lane < activeLanes.Count; lane++)
                 {
-                    if (i == lane) continue; // skip main line
-                    if (activeLanes[i] != null)
+                    if (activeLanes[lane] != null)
                     {
-                        row.Segments.Add(new GraphSeg
-                        {
-                            FromLane = i,
-                            ToLane = i,
-                            Kind = SegKind.Vertical,
-                            ColorIndex = laneColor[i]
-                        });
-                    }
-                }
-
-                // 4️⃣ Add merge / branch segments to parents
-                if (c.ParentShas is { Count: > 0 })
-                {
-                    // First parent continues on same lane
-                    var firstParent = c.ParentShas[0];
-                    activeLanes[lane] = firstParent;
-
-                    row.Segments.Add(new GraphSeg
-                    {
-                        FromLane = lane,
-                        ToLane = lane,
-                        Kind = SegKind.Vertical,
-                        ColorIndex = laneColor[lane]
-                    });
-
-                    // Other parents = merges → allocate new lanes if needed
-                    for (int i = 1; i < c.ParentShas.Count; i++)
-                    {
-                        var parentSha = c.ParentShas[i];
-
-                        // Try to reuse an empty slot
-                        int mergeLane = activeLanes.IndexOf(null!);
-                        if (mergeLane == -1)
-                        {
-                            mergeLane = activeLanes.Count;
-                            activeLanes.Add(parentSha);
-                            laneColor[mergeLane] = mergeLane;
-                        }
-                        else
-                        {
-                            activeLanes[mergeLane] = parentSha;
-                        }
-
                         row.Segments.Add(new GraphSeg
                         {
                             FromLane = lane,
-                            ToLane = mergeLane,
-                            Kind = SegKind.Merge,
-                            ColorIndex = laneColor[lane]
+                            ToLane = lane,
+                            Kind = SegKind.Vertical,
+                            ColorIndex = lane
                         });
                     }
                 }
-                else
+
+                // 3) Branch-out: allocate lanes for extra children (if any)
+                if (children.TryGetValue(sha, out var childList) && childList.Count > 1)
                 {
-                    // No parents — this branch line ends
-                    activeLanes[lane] = null!;
+                    // childList order is derived from commitList traversal
+                    for (int k = 1; k < childList.Count; k++)
+                    {
+                        var childSha = childList[k];
+
+                        // Only create a lane if that child appears later in the materialized list
+                        if (!indexBySha.ContainsKey(childSha)) continue;
+
+                        int newLane = activeLanes.IndexOf(null);
+                        if (newLane == -1)
+                        {
+                            newLane = activeLanes.Count;
+                            activeLanes.Add(childSha);
+                        }
+                        else
+                        {
+                            activeLanes[newLane] = childSha;
+                        }
+
+                        row.Segments.Add(new GraphSeg
+                        {
+                            FromLane = laneIndex,
+                            ToLane = newLane,
+                            Kind = SegKind.Branch,
+                            ColorIndex = newLane
+                        });
+                    }
                 }
 
-                rows.Add(row);
+                // 4) Merge-in: handle secondary parents (parents[1..])
+                if (parents.Length > 1)
+                {
+                    for (int pIdx = 1; pIdx < parents.Length; pIdx++)
+                    {
+                        var parentSha = parents[pIdx];
+                        int parentLane = activeLanes.IndexOf(parentSha);
+                        if (parentLane == -1)
+                        {
+                            int freeLane = activeLanes.IndexOf(null);
+                            if (freeLane == -1)
+                            {
+                                parentLane = activeLanes.Count;
+                                activeLanes.Add(parentSha);
+                            }
+                            else
+                            {
+                                parentLane = freeLane;
+                                activeLanes[parentLane] = parentSha;
+                            }
+                        }
+
+                        row.Segments.Add(new GraphSeg
+                        {
+                            FromLane = laneIndex,
+                            ToLane = parentLane,
+                            Kind = SegKind.Merge,
+                            ColorIndex = parentLane
+                        });
+                    }
+                }
+
+                // 5) Advance this lane to first parent (or free it)
+                if (parents.Length > 0)
+                    activeLanes[laneIndex] = parents[0];
+                else
+                    activeLanes[laneIndex] = null;
+
+                // 6) Compact trailing null lanes to keep lane count minimal
+                while (activeLanes.Count > 0 && activeLanes[^1] == null)
+                    activeLanes.RemoveAt(activeLanes.Count - 1);
+
+                // 7) ConnectTop: did previous row occupy this same lane?
+                row.ConnectTop = (prevPrimaryLane.HasValue && prevPrimaryLane.Value == row.PrimaryLane);
+                prevPrimaryLane = row.PrimaryLane;
             }
 
             return rows;

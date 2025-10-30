@@ -1,4 +1,5 @@
 ﻿// GitGUI.ViewModels/CommitGraphVM.cs
+using GitGUI.Core;
 using GitGUI.Models;
 using GitGUI.Services;
 using System.Collections.ObjectModel;
@@ -10,6 +11,8 @@ namespace GitGUI.ViewModels
 {
     public sealed class CommitGraphVM : INotifyPropertyChanged, IDisposable
     {
+        private readonly IGitService _git;
+
         public ObservableCollection<CommitRow> Items { get; } = new();
 
         private CommitRow? _selectedItem;
@@ -26,14 +29,7 @@ namespace GitGUI.ViewModels
             private set { if (_isBusy != value) { _isBusy = value; OnPropertyChanged(); } }
         }
 
-        private bool _hasMore;
-        public bool HasMore
-        {
-            get => _hasMore;
-            private set { if (_hasMore != value) { _hasMore = value; OnPropertyChanged(); } }
-        }
-
-        private double _graphWidth = 180; // px (LaneWidth * (maxLane+padding))
+        private double _graphWidth = 180;
         public double GraphWidth
         {
             get => _graphWidth;
@@ -41,37 +37,29 @@ namespace GitGUI.ViewModels
         }
 
         // Config
-        public int InitialLoadCount { get; set; } = 1000;
-        public int PageSize { get; set; } = 800;
         public double LaneWidth { get; set; } = 14.0;
+        public int MaxCommits { get; set; } = 2000;
 
-        // Context
-        public string? RepoPath { get; private set; }
+        // Context moved to IGitService
         public string? BranchName { get; private set; }
 
         // Commands
-        public ICommand LoadMoreCommand { get; }
         public ICommand RefreshCommand { get; }
 
-        // Internals
-        private int _loadedCount = 0;
         private CancellationTokenSource? _cts;
 
-        public CommitGraphVM()
+        // ---------- ctor (DI) ----------
+        public CommitGraphVM(IGitService git)
         {
-            LoadMoreCommand = new RelayCommand(async _ => await LoadMoreAsync(), _ => HasMore && !IsBusy);
+            _git = git ?? throw new ArgumentNullException(nameof(git));
             RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         }
 
-        public async Task InitializeAsync(string repoPath, string? branchName = null)
+        // ---------- loading API ----------
+        public async Task LoadAllBranchesAsync()
         {
-            RepoPath = repoPath;
-            BranchName = branchName;
-            await LoadInitialAsync();
-        }
+            if (!_git.IsRepositoryOpen) return;
 
-        public async Task LoadInitialAsync()
-        {
             CancelInFlight();
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
@@ -80,35 +68,35 @@ namespace GitGUI.ViewModels
             try
             {
                 Items.Clear();
-                _loadedCount = 0;
 
-                // Compute on background thread
-                var (rows, maxLaneUsed, totalCount) = await Task.Run(() =>
+                var (rows, maxLaneUsed) = await Task.Run(() =>
                 {
                     token.ThrowIfCancellationRequested();
 
-                    // ✅ simplified FetchCommits call (no branchName)
-                    var infos = GitCommitFetcher.FetchCommits(RepoPath!, max: InitialLoadCount);
-                    var list = CommitRowFactory.From(infos);
+                    // Preferred: fetch commits (all branches) from the injected service
+                    var commits = _git.FetchCommitsForGraph(MaxCommits);
+
+                    // Build rows from LibGit2Sharp.Commit objects
+                    //var rowsFromCommits = CommitGraphBuilder.BuildFromCommits(commits);
+                    //int maxLane = rowsFromCommits.Count > 0 ? rowsFromCommits.Max(r => r.PrimaryLane) : 0;
+                    var list = CommitRowFactory.FromCommits(commits);
                     CommitGraphLayoutSimple.Layout(list, out int maxLane);
-                    return (list, maxLane, infos.Count);
+                    return (list, maxLane);
                 }, token);
 
-                // Assign on UI thread
-                foreach (var r in rows) Items.Add(r);
-                _loadedCount = Items.Count;
+                DebugDumpRows(rows, 60);
 
-                // Compute width
+                foreach (var r in rows)
+                    Items.Add(r);
+                System.Diagnostics.Debug.WriteLine($"[DBG] CommitGraphVM.Items.Count = {Items.Count}");
+
+                // compute width
                 const double BaseGraphWidth = 24.0;
                 const int PaddingLanes = 1;
                 int lanes = maxLaneUsed + 1;
                 GraphWidth = (lanes <= 1)
                     ? BaseGraphWidth
                     : Math.Max(BaseGraphWidth, LaneWidth * (lanes + PaddingLanes));
-
-                // For simplicity, always allow loading more if count == limit
-                HasMore = _loadedCount >= InitialLoadCount;
-                RaiseCanExec();
             }
             finally
             {
@@ -116,65 +104,7 @@ namespace GitGUI.ViewModels
             }
         }
 
-        public async Task LoadMoreAsync()
-        {
-            if (IsBusy || !HasMore || string.IsNullOrEmpty(RepoPath)) return;
-
-            CancelInFlight();
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
-            IsBusy = true;
-            try
-            {
-                var (newRows, hasMore, maxLaneUsed) = await Task.Run(() =>
-                {
-                    token.ThrowIfCancellationRequested();
-
-                    // ✅ again no branchName
-                    var window = GitCommitFetcher.FetchCommits(RepoPath!, max: _loadedCount + PageSize);
-                    var allRows = CommitRowFactory.From(window);
-                    CommitGraphLayoutSimple.Layout(allRows, out int maxLane);
-
-                    var tail = allRows.Skip(_loadedCount).ToList();
-                    bool more = window.Count >= _loadedCount + PageSize;
-                    return (tail, more, maxLane);
-                }, token);
-
-                foreach (var r in newRows) Items.Add(r);
-                _loadedCount = Items.Count;
-
-                // Grow width if new branches appear
-                const double BaseGraphWidth = 24.0;
-                const int PaddingLanes = 1;
-                int lanes = maxLaneUsed + 1;
-                var desiredWidth = (lanes <= 1)
-                    ? BaseGraphWidth
-                    : Math.Max(BaseGraphWidth, LaneWidth * (lanes + PaddingLanes));
-                GraphWidth = Math.Max(GraphWidth, desiredWidth);
-
-                HasMore = hasMore;
-                RaiseCanExec();
-            }
-            finally
-            {
-                IsBusy = false;
-            }
-        }
-
-        public async Task RefreshAsync() => await LoadInitialAsync();
-
-        public async Task ChangeBranchAsync(string? branchName)
-        {
-            BranchName = branchName;
-            await LoadInitialAsync();
-        }
-
-        private void RaiseCanExec()
-        {
-            (LoadMoreCommand as RelayCommand)?.RaiseCanExecuteChanged();
-            (RefreshCommand as RelayCommand)?.RaiseCanExecuteChanged();
-        }
+        public async Task RefreshAsync() => await LoadAllBranchesAsync();
 
         private void CancelInFlight()
         {
@@ -188,5 +118,22 @@ namespace GitGUI.ViewModels
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        // Debug helper - put this inside CommitGraphVM
+        private void DebugDumpRows(IEnumerable<CommitRow> rows, int count = 40)
+        {
+            System.Diagnostics.Debug.WriteLine("=== CommitGraph DebugDumpRows ===");
+            int i = 0;
+            foreach (var r in rows)
+            {
+                if (i++ >= count) break;
+                var segs = r.Segments.Count == 0 ? "(no-segs)" :
+                           string.Join(", ", r.Segments.Select(s => $"{s.Kind}[{s.FromLane}->{s.ToLane}]"));
+                var parents = r.Parents != null && r.Parents.Count > 0 ? string.Join(",", r.Parents.Take(3)) : "(no-parents)";
+                System.Diagnostics.Debug.WriteLine($"{i,3}: {r.Sha[..7]} lane={r.PrimaryLane} segs={segs} parents={parents}");
+            }
+            System.Diagnostics.Debug.WriteLine("=== end dump ===");
+        }
+
     }
 }
