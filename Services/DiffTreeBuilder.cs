@@ -11,68 +11,98 @@ namespace GitGUI.Services
 {
     public static class DiffTreeBuilder
     {
-        public static (ObservableCollection<StepNode> beforeRoots, ObservableCollection<StepNode> afterRoots) BuildTrees(TestPlan before, TestPlan after)
+        public static (ObservableCollection<StepNode> beforeRoots, ObservableCollection<StepNode> afterRoots)
+            BuildTrees(TestPlan? before, TestPlan? after)
         {
-            // ComparePlans returns List<StepDiff>
-            var diffs = ComparePlans(before, after);
+            // ✅ Replace null with empty TestPlan for proper comparison
+            before ??= CreateEmptyTestPlan();
+            after ??= CreateEmptyTestPlan();
 
-            // Index by Id for quick lookup while building both trees
-            var diffById = diffs.ToDictionary(d => d.Id, d => d);
-
-            // Colors
-            Brush added = new SolidColorBrush(Color.FromRgb(220, 255, 220)); // green-ish
-            Brush removed = new SolidColorBrush(Color.FromRgb(255, 228, 225)); // red-ish
+            // ✅ Colors defined once at the top
+            Brush added = new SolidColorBrush(Color.FromRgb(220, 255, 220));    // green-ish
+            Brush removed = new SolidColorBrush(Color.FromRgb(255, 228, 225));  // red-ish
             Brush modified = new SolidColorBrush(Color.FromRgb(255, 249, 196)); // yellow-ish
             Brush neutral = System.Windows.Media.Brushes.Transparent;
 
-            StepNode BuildNode(ITestStep s, bool isAfterSide)
+            // ✅ Handle both empty case
+            if (before.Steps.Count == 0 && after.Steps.Count == 0)
+            {
+                return (new ObservableCollection<StepNode>(), new ObservableCollection<StepNode>());
+            }
+
+            // ✅ Both are now guaranteed to be non-null with ComparePlans able to enumerate all properties
+            var diffs = ComparePlans(before, after);
+            var diffById = diffs.ToDictionary(d => d.Id, d => d);
+
+            var beforeRoots = new ObservableCollection<StepNode>(
+                before.Steps.Select(s => BuildNode(s, false, diffById))
+            );
+            var afterRoots = new ObservableCollection<StepNode>(
+                after.Steps.Select(s => BuildNode(s, true, diffById))
+            );
+
+            return (beforeRoots, afterRoots);
+
+            // ✅ BuildNode with full access to colors and diffs
+            StepNode BuildNode(ITestStep s, bool isAfterSide, Dictionary<string, TestStepDiff> diffById)
             {
                 diffById.TryGetValue(s.Id.ToString("D"), out var d);
 
                 var kind = d?.Kind ?? StepChangeKind.Unchanged;
                 Brush bg = kind switch
                 {
-                    StepChangeKind.Added => isAfterSide ? added : neutral, // only on after
-                    StepChangeKind.Removed => isAfterSide ? neutral : removed, // only on before
+                    StepChangeKind.Added => isAfterSide ? added : neutral,       // only on after
+                    StepChangeKind.Removed => isAfterSide ? neutral : removed,   // only on before
                     StepChangeKind.Modified => modified,
                     _ => neutral
                 };
 
                 var vm = new StepNode(s.Id, s.Name ?? "", s.GetType().Name, kind, bg);
 
-                // For Modified steps, show per-property rows on both sides
-                if (kind == StepChangeKind.Modified && d is not null)
+                // ✅ Now d is ALWAYS populated (because ComparePlans always runs)
+                if (d is not null)
                 {
-                    foreach (var pc in d.PropertyChanges.OrderBy(x => x.Name, StringComparer.Ordinal))
+                    // For Modified steps: show only changed properties
+                    if (kind == StepChangeKind.Modified)
                     {
-                        var val = isAfterSide ? pc.After : pc.Before;
-                        vm.Children.Add(new PropertyNode(pc.Name, ToDisplay(val), bg));
+                        foreach (var pc in d.PropertyChanges.OrderBy(x => x.Name, StringComparer.Ordinal))
+                        {
+                            var val = isAfterSide ? pc.After : pc.Before;
+                            vm.Children.Add(new PropertyNode(pc.Name, ToDisplay(val), modified));
+                        }
                     }
-                }
 
-                // If you want props for Added/Removed too, uncomment:
-                if (kind == StepChangeKind.Added && isAfterSide && d is not null)
-                {
-                    foreach (var pc in d.PropertyChanges.OrderBy(x => x.Name, StringComparer.Ordinal))
-                        vm.Children.Add(new PropertyNode(pc.Name, ToDisplay(pc.After), added));
-                }
-                if (kind == StepChangeKind.Removed && !isAfterSide && d is not null)
-                {
-                    foreach (var pc in d.PropertyChanges.OrderBy(x => x.Name, StringComparer.Ordinal))
-                        vm.Children.Add(new PropertyNode(pc.Name, ToDisplay(pc.Before), removed));
+                    // For Added steps: show ALL properties with added color
+                    if (kind == StepChangeKind.Added && isAfterSide)
+                    {
+                        foreach (var pc in d.PropertyChanges.OrderBy(x => x.Name, StringComparer.Ordinal))
+                        {
+                            vm.Children.Add(new PropertyNode(pc.Name, ToDisplay(pc.After), added));
+                        }
+                    }
+
+                    // For Removed steps: show ALL properties with removed color
+                    if (kind == StepChangeKind.Removed && !isAfterSide)
+                    {
+                        foreach (var pc in d.PropertyChanges.OrderBy(x => x.Name, StringComparer.Ordinal))
+                        {
+                            vm.Children.Add(new PropertyNode(pc.Name, ToDisplay(pc.Before), removed));
+                        }
+                    }
                 }
 
                 // Recurse (keeps plan order)
                 foreach (var c in s.ChildTestSteps)
-                    vm.Children.Add(BuildNode(c, isAfterSide));
+                    vm.Children.Add(BuildNode(c, isAfterSide, diffById));
 
                 return vm;
             }
+        }
 
-            var beforeRoots = new ObservableCollection<StepNode>(before.Steps.Select(s => BuildNode(s, false)));
-            var afterRoots = new ObservableCollection<StepNode>(after.Steps.Select(s => BuildNode(s, true)));
-
-            return (beforeRoots, afterRoots);
+        // ✅ Helper: Create empty TestPlan for null comparison
+        private static TestPlan CreateEmptyTestPlan()
+        {
+            return new TestPlan();
         }
 
         private static string? ToDisplay(object? v)

@@ -13,10 +13,10 @@ namespace GitGUI.ViewModels
     {
         private readonly IGitService _git;
 
-        public ObservableCollection<CommitRow> Items { get; } = new();
+        public ObservableCollection<CommitRowViewModel> Items { get; } = new();
 
-        private CommitRow? _selectedItem;
-        public CommitRow? SelectedItem
+        private CommitRowViewModel? _selectedItem;
+        public CommitRowViewModel? SelectedItem
         {
             get => _selectedItem;
             set { if (_selectedItem != value) { _selectedItem = value; OnPropertyChanged(); } }
@@ -38,7 +38,6 @@ namespace GitGUI.ViewModels
 
         // Config
         public double LaneWidth { get; set; } = 14.0;
-        public int MaxCommits { get; set; } = 2000;
 
         // Context moved to IGitService
         public string? BranchName { get; private set; }
@@ -74,12 +73,12 @@ namespace GitGUI.ViewModels
                     token.ThrowIfCancellationRequested();
 
                     // Preferred: fetch commits (all branches) from the injected service
-                    var commits = _git.FetchCommitsForGraph(MaxCommits);
+                    var commits = _git.FetchCommitsForGraph();
 
                     // Build rows from LibGit2Sharp.Commit objects
                     //var rowsFromCommits = CommitGraphBuilder.BuildFromCommits(commits);
                     //int maxLane = rowsFromCommits.Count > 0 ? rowsFromCommits.Max(r => r.PrimaryLane) : 0;
-                    var list = CommitRowFactory.FromCommits(commits);
+                    var list = CommitRowFactory.FromCommits(commits, _git);
                     CommitGraphLayoutSimple.Layout(list, out int maxLane);
                     return (list, maxLane);
                 }, token);
@@ -120,7 +119,7 @@ namespace GitGUI.ViewModels
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         // Debug helper - put this inside CommitGraphVM
-        private void DebugDumpRows(IEnumerable<CommitRow> rows, int count = 40)
+        private void DebugDumpRows(IEnumerable<CommitRowViewModel> rows, int count = 40)
         {
             System.Diagnostics.Debug.WriteLine("=== CommitGraph DebugDumpRows ===");
             int i = 0;

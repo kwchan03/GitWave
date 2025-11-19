@@ -39,7 +39,7 @@ public static class GitHelper
 
     // ─── Helpers ──────────────────────────────────────────────
 
-    private static TestPlan LoadTestPlanFromCommit(Repository repo, Commit commit, string repoRelativeFile)
+    public static TestPlan LoadTestPlanFromCommit(Repository repo, Commit commit, string repoRelativeFile)
     {
         var norm = NormalizePath(repoRelativeFile);
         var entry = commit.Tree[norm];

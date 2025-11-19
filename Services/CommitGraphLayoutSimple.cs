@@ -1,17 +1,23 @@
 ﻿using GitGUI.Models;
+using GitGUI.ViewModels;
 
 namespace GitGUI.Services
 {
     /// <summary>
-    /// Simple and correct commit graph layout algorithm.
-    /// This algorithm works by:
-    /// 1. Only drawing lines where they actually exist in the git history
-    /// 2. Root commits have no line below (just a dot)
-    /// 3. Branches start from commits that actually have multiple children
+    /// Simplified Git commit graph layout algorithm.
+    /// Features:
+    /// - Main branch always in lane 0
+    /// - Automatic lane and color assignment
+    /// - Merge detection: commits with multiple parents → Merge segments
+    /// - Branch detection: commits with multiple children → Branch segments
+    /// 
+    /// Connection tracking:
+    /// - HasIncomingConnection: true if commit has a connection from above (was pre-assigned a lane)
+    /// - HasOutgoingConnection: true if commit has parents (connections going down to parent commits)
     /// </summary>
     public static class CommitGraphLayoutSimple
     {
-        public static void Layout(IList<CommitRow> rows, out int maxLaneUsed)
+        public static void Layout(IList<CommitRowViewModel> rows, out int maxLaneUsed)
         {
             if (rows.Count == 0)
             {
@@ -19,224 +25,404 @@ namespace GitGUI.Services
                 return;
             }
 
-            // Create a mapping of commit SHA to row index
-            var commitToIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+            var state = new LayoutState();
+            var mainLineCommits = BuildMainLineCommits(rows);
+            var commitMap = BuildCommitMap(rows);
+            var childrenMap = BuildChildrenMap(rows);
+
             for (int i = 0; i < rows.Count; i++)
             {
-                commitToIndex[rows[i].Sha] = i;
+                ProcessCommit(rows[i], state, mainLineCommits, commitMap, childrenMap);
             }
 
-            // Build a map of commit -> its children
+            maxLaneUsed = state.MaxLaneUsed;
+        }
+
+        #region Data Structures
+
+        private class LayoutState
+        {
+            public Dictionary<string, int> CommitLanes { get; } = new(StringComparer.Ordinal);
+            public Dictionary<string, int> CommitColors { get; } = new(StringComparer.Ordinal);
+            public List<string?> ActiveLanes { get; } = new();
+            public int NextColorIndex { get; set; } = 1; // Color 0 reserved for main branch
+            public int MaxLaneUsed { get; set; } = 0;
+        }
+
+        private static Dictionary<string, CommitRowViewModel> BuildCommitMap(IList<CommitRowViewModel> rows)
+        {
+            return rows.ToDictionary(r => r.Sha, StringComparer.Ordinal);
+        }
+
+        private static HashSet<string> BuildMainLineCommits(IList<CommitRowViewModel> rows)
+        {
+            var mainLine = new HashSet<string>(StringComparer.Ordinal);
+
+            if (rows.Count == 0) return mainLine;
+
+            var commitMap = BuildCommitMap(rows);
+            var current = rows[0].Sha;
+
+            // Follow first-parent chain from HEAD to build main line
+            while (!string.IsNullOrEmpty(current))
+            {
+                mainLine.Add(current);
+
+                if (!commitMap.TryGetValue(current, out var row) || row.Parents.Count == 0)
+                    break;
+
+                current = row.Parents[0]; // Always follow first parent
+            }
+
+            return mainLine;
+        }
+
+        private static Dictionary<string, List<string>> BuildChildrenMap(IList<CommitRowViewModel> rows)
+        {
             var childrenMap = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
             foreach (var row in rows)
             {
-                foreach (var parent in row.Parents ?? Array.Empty<string>())
+                foreach (var parentSha in row.Parents)
                 {
-                    if (!childrenMap.ContainsKey(parent))
-                        childrenMap[parent] = new List<string>();
-                    childrenMap[parent].Add(row.Sha);
+                    if (!childrenMap.TryGetValue(parentSha, out var children))
+                    {
+                        children = new List<string>();
+                        childrenMap[parentSha] = children;
+                    }
+                    children.Add(row.Sha);
                 }
             }
 
-            // Track lane assignments
-            var laneAssignments = new Dictionary<string, int>(StringComparer.Ordinal);
-            maxLaneUsed = 0;
+            return childrenMap;
+        }
 
-            // Process commits from newest to oldest (top to bottom in display)
-            for (int i = 0; i < rows.Count; i++)
+        #endregion
+
+        #region Main Processing
+
+        private static void ProcessCommit(
+            CommitRowViewModel row,
+            LayoutState state,
+            HashSet<string> mainLineCommits,
+            Dictionary<string, CommitRowViewModel> commitMap,
+            Dictionary<string, List<string>> childrenMap)
+        {
+            row.Segments.Clear();
+
+            var sha = row.Sha;
+            var parents = row.Parents?.ToArray() ?? Array.Empty<string>();
+
+            // Step 1: Assign lane and color to this commit
+            var (lane, color, wasPreAssigned) = AssignLaneAndColor(sha, parents, state, mainLineCommits);
+
+            row.PrimaryLane = lane;
+            row.BranchColorIndex = color;
+
+            // HasIncomingConnection: true if this commit was pre-assigned (has connection from above)
+            row.HasIncomingConnection = wasPreAssigned;
+
+            // HasOutgoingConnection: true if this commit has any parents (connections going down)
+            row.HasOutgoingConnection = parents.Length > 0;
+
+            state.MaxLaneUsed = Math.Max(state.MaxLaneUsed, lane);
+
+            // Step 2: Draw pass-through lines for other active lanes
+            DrawPassThroughLines(row, lane, state);
+
+            // Step 3: Clear current lane (this commit is being processed)
+            state.ActiveLanes[lane] = null;
+
+            // Step 4: Handle parents
+            // - If 1 parent: normal continuation
+            // - If 2+ parents: MERGE - draw merge segments from additional parents
+            if (parents.Length > 0)
             {
-                var currentRow = rows[i];
-                currentRow.Segments.Clear();
+                HandleParents(row, lane, color, parents, state, mainLineCommits);
+            }
 
-                var parents = currentRow.Parents ?? Array.Empty<string>();
+            // Step 5: Handle branching
+            // - If this commit has 2+ children: BRANCH - draw branch segments to additional children
+            HandleBranching(row, sha, lane, color, state, mainLineCommits, childrenMap);
+        }
 
-                // Determine the lane for this commit
-                int currentLane;
-                if (laneAssignments.TryGetValue(currentRow.Sha, out currentLane))
+        private static (int lane, int color, bool wasPreAssigned) AssignLaneAndColor(
+            string sha,
+            string[] parents,
+            LayoutState state,
+            HashSet<string> mainLineCommits)
+        {
+            // Check if lane was pre-assigned (incoming branch)
+            if (state.CommitLanes.TryGetValue(sha, out int lane))
+            {
+                int color = state.CommitColors[sha];
+                return (lane, color, true);
+            }
+
+            // Main branch commits always use lane 0 and color 0
+            if (mainLineCommits.Contains(sha))
+            {
+                lane = 0;
+                int color = 0;
+
+                EnsureLaneExists(lane, state);
+                state.CommitLanes[sha] = lane;
+                state.CommitColors[sha] = color;
+
+                return (lane, color, false);
+            }
+
+            // Branch commits: find free lane (skip lane 0 reserved for main)
+            lane = FindFirstFreeLane(state.ActiveLanes, skipLane0: true);
+            EnsureLaneExists(lane, state);
+
+            // Inherit color from first parent if available, otherwise assign new color
+            int branchColor;
+            if (parents.Length > 0 && state.CommitColors.TryGetValue(parents[0], out int parentColor))
+            {
+                branchColor = parentColor;
+            }
+            else
+            {
+                branchColor = state.NextColorIndex++;
+            }
+
+            state.CommitLanes[sha] = lane;
+            state.CommitColors[sha] = branchColor;
+
+            return (lane, branchColor, false);
+        }
+
+        private static void DrawPassThroughLines(CommitRowViewModel row, int commitLane, LayoutState state)
+        {
+            for (int lane = 0; lane < state.ActiveLanes.Count; lane++)
+            {
+                if (lane != commitLane && state.ActiveLanes[lane] != null)
                 {
-                    currentRow.ConnectTop = true;
-                }
-                else
-                {
-                    // Find the best lane based on parents
-                    currentLane = FindBestLaneForCommit(currentRow, parents, laneAssignments, commitToIndex, rows);
-                    laneAssignments[currentRow.Sha] = currentLane;
-                    currentRow.ConnectTop = false;
-                }
+                    var activeSha = state.ActiveLanes[lane];
+                    var laneColor = state.CommitColors[activeSha!];
 
-                currentRow.PrimaryLane = currentLane;
-                maxLaneUsed = Math.Max(maxLaneUsed, currentLane);
-
-                // Draw vertical lines for commits that are being continued (pass-through lanes)
-                // Only draw lines for commits that:
-                // 1. Have children in rows above (lane is active above)
-                // 2. Will appear in rows below (lane continues below)
-                // 3. Are not the current commit
-                foreach (var kvp in laneAssignments)
-                {
-                    // Skip the current commit - its vertical line is handled separately below
-                    if (kvp.Key == currentRow.Sha)
-                        continue;
-
-                    // Check if this commit appears below the current row
-                    if (!commitToIndex.TryGetValue(kvp.Key, out int commitIndex) || commitIndex <= i)
-                        continue; // This commit doesn't appear below, so lane ends here
-
-                    if (childrenMap.TryGetValue(kvp.Key, out var children))
+                    row.Segments.Add(new GraphSegment
                     {
-                        // Check if any of the children are in the rows above
-                        bool hasChildrenAbove = false;
-                        for (int j = 0; j < i; j++)
-                        {
-                            if (children.Contains(rows[j].Sha))
-                            {
-                                hasChildrenAbove = true;
-                                break;
-                            }
-                        }
-
-                        if (hasChildrenAbove)
-                        {
-                            currentRow.Segments.Add(new GraphSeg
-                            {
-                                FromLane = kvp.Value,
-                                ToLane = kvp.Value,
-                                Kind = SegKind.Vertical,
-                                ColorIndex = kvp.Value
-                            });
-                        }
-                    }
-                }
-
-                // Handle branch creation - if this commit has multiple children, create branch lines
-                if (childrenMap.TryGetValue(currentRow.Sha, out var currentChildren) && currentChildren.Count > 1)
-                {
-                    // This commit has multiple children - it's a branch point
-                    // The first child continues on the same lane, others get new lanes
-                    for (int childIndex = 1; childIndex < currentChildren.Count; childIndex++)
-                    {
-                        var childSha = currentChildren[childIndex];
-                        int branchLane;
-
-                        // If the child already has a lane assignment, use it
-                        if (laneAssignments.TryGetValue(childSha, out branchLane))
-                        {
-                            // Child already assigned to a lane, use that lane
-                        }
-                        else
-                        {
-                            // Find a new lane for the child
-                            branchLane = FindBranchLane(laneAssignments, currentLane);
-                            laneAssignments[childSha] = branchLane;
-                        }
-
-                        // Draw branch line from current commit to the child's lane
-                        currentRow.Segments.Add(new GraphSeg
-                        {
-                            FromLane = currentLane,
-                            ToLane = branchLane,
-                            Kind = SegKind.Branch,
-                            ColorIndex = branchLane
-                        });
-
-                        maxLaneUsed = Math.Max(maxLaneUsed, branchLane);
-                    }
-                }
-
-                // Handle parents
-                if (parents.Count == 0)
-                {
-                    // No parents - this is a root commit, just draw the dot
-                    // No line below for root commits
-                }
-                else
-                {
-                    // First parent continues on the same lane
-                    var firstParent = parents[0];
-                    if (!laneAssignments.ContainsKey(firstParent))
-                    {
-                        laneAssignments[firstParent] = currentLane;
-                    }
-
-                    // Draw the main vertical line to first parent
-                    currentRow.Segments.Add(new GraphSeg
-                    {
-                        FromLane = currentLane,
-                        ToLane = currentLane,
-                        Kind = SegKind.Vertical,
-                        ColorIndex = currentLane
+                        FromLane = lane,
+                        ToLane = lane,
+                        Kind = SegmentKind.Vertical,
+                        ColorIndex = laneColor
                     });
-
-                    // Handle additional parents (merge commits)
-                    for (int j = 1; j < parents.Count; j++)
-                    {
-                        var mergeParent = parents[j];
-                        int mergeLane = FindMergeLane(laneAssignments, currentLane);
-
-                        if (!laneAssignments.ContainsKey(mergeParent))
-                        {
-                            laneAssignments[mergeParent] = mergeLane;
-                        }
-
-                        // Draw merge line
-                        currentRow.Segments.Add(new GraphSeg
-                        {
-                            FromLane = currentLane,
-                            ToLane = mergeLane,
-                            Kind = SegKind.Merge,
-                            ColorIndex = mergeLane
-                        });
-
-                        maxLaneUsed = Math.Max(maxLaneUsed, mergeLane);
-                    }
                 }
             }
         }
 
-        private static int FindBestLaneForCommit(CommitRow currentRow, IReadOnlyList<string> parents,
-            Dictionary<string, int> laneAssignments, Dictionary<string, int> commitToIndex, IList<CommitRow> rows)
+        private static void HandleParents(
+            CommitRowViewModel row,
+            int commitLane,
+            int commitColor,
+            string[] parents,
+            LayoutState state,
+            HashSet<string> mainLineCommits)
         {
-            if (parents.Count == 0)
-                return 0;
+            // First parent: continues the current branch
+            HandleFirstParent(row, commitLane, commitColor, parents[0], state, mainLineCommits);
 
-            // If any parent is already assigned a lane, try to use its lane
-            foreach (var parent in parents)
+            // Additional parents (if any): MERGE - draw merge segments
+            // This handles the case where this commit has multiple parents (merge commit)
+            for (int i = 1; i < parents.Length; i++)
             {
-                if (laneAssignments.TryGetValue(parent, out int parentLane))
+                HandleMergeParent(row, commitLane, parents[i], state, mainLineCommits);
+            }
+        }
+
+        private static void HandleFirstParent(
+            CommitRowViewModel row,
+            int commitLane,
+            int commitColor,
+            string parentSha,
+            LayoutState state,
+            HashSet<string> mainLineCommits)
+        {
+            int parentLane;
+            int parentColor;
+
+            // Check if parent already has lane assigned
+            if (state.CommitLanes.TryGetValue(parentSha, out parentLane))
+            {
+                parentColor = state.CommitColors[parentSha];
+            }
+            else
+            {
+                // Parent lane not yet assigned - determine lane based on main line status
+                if (mainLineCommits.Contains(parentSha))
                 {
-                    return parentLane;
+                    parentLane = 0;
+                    parentColor = 0;
                 }
+                else
+                {
+                    // Continue in same lane
+                    parentLane = commitLane;
+                    parentColor = commitColor;
+                }
+
+                state.CommitLanes[parentSha] = parentLane;
+                state.CommitColors[parentSha] = parentColor;
             }
 
-            // Find the first available lane
-            int lane = 0;
-            while (laneAssignments.Values.Contains(lane))
+            // Reserve the lane for the parent
+            EnsureLaneExists(parentLane, state);
+            state.ActiveLanes[parentLane] = parentSha;
+
+            // Draw vertical connection to first parent
+            row.Segments.Add(new GraphSegment
             {
-                lane++;
-            }
-            return lane;
+                FromLane = commitLane,
+                ToLane = parentLane,
+                Kind = SegmentKind.Vertical,
+                ColorIndex = commitColor
+            });
         }
 
-        private static int FindMergeLane(Dictionary<string, int> laneAssignments, int currentLane)
+        private static void HandleMergeParent(
+            CommitRowViewModel row,
+            int commitLane,
+            string parentSha,
+            LayoutState state,
+            HashSet<string> mainLineCommits)
         {
-            // Find the first available lane to the right of current lane
-            int lane = currentLane + 1;
-            while (laneAssignments.Values.Contains(lane))
+            int parentLane;
+            int parentColor;
+
+            // Check if merge parent already has lane assigned
+            if (state.CommitLanes.TryGetValue(parentSha, out parentLane))
             {
-                lane++;
+                parentColor = state.CommitColors[parentSha];
             }
-            return lane;
+            else
+            {
+                // Assign new lane for merge parent
+                if (mainLineCommits.Contains(parentSha))
+                {
+                    parentLane = 0;
+                    parentColor = 0;
+                }
+                else
+                {
+                    parentLane = FindFirstFreeLane(state.ActiveLanes, skipLane0: true);
+                    parentColor = state.NextColorIndex++;
+                }
+
+                EnsureLaneExists(parentLane, state);
+                state.CommitLanes[parentSha] = parentLane;
+                state.CommitColors[parentSha] = parentColor;
+                state.ActiveLanes[parentLane] = parentSha;
+                state.MaxLaneUsed = Math.Max(state.MaxLaneUsed, parentLane);
+            }
+
+            // Draw MERGE segment from this commit to the merge parent
+            row.Segments.Add(new GraphSegment
+            {
+                FromLane = commitLane,
+                ToLane = parentLane,
+                Kind = SegmentKind.Merge,
+                ColorIndex = parentColor
+            });
         }
 
-        private static int FindBranchLane(Dictionary<string, int> laneAssignments, int currentLane)
+        private static void HandleBranching(
+            CommitRowViewModel row,
+            string sha,
+            int commitLane,
+            int commitColor,
+            LayoutState state,
+            HashSet<string> mainLineCommits,
+            Dictionary<string, List<string>> childrenMap)
         {
-            // Find the first available lane to the right of current lane
-            int lane = currentLane + 1;
-            while (laneAssignments.Values.Contains(lane))
+            // Check if this commit has multiple children (fork point)
+            if (!childrenMap.TryGetValue(sha, out var children) || children.Count <= 1)
+                return; // Not a branch point - only 0 or 1 child
+
+            // This commit has 2+ children - BRANCH point
+            // First child already handled in first parent continuation
+            // Additional children need branch segments
+            for (int i = 1; i < children.Count; i++)
             {
-                lane++;
+                var childSha = children[i];
+
+                // Skip if child already has a lane assigned
+                if (state.CommitLanes.ContainsKey(childSha))
+                    continue;
+
+                int childLane;
+                int childColor;
+
+                // Check if child is on main line
+                if (mainLineCommits.Contains(childSha))
+                {
+                    childLane = 0;
+                    childColor = 0;
+                }
+                else
+                {
+                    // Allocate new lane for this branch (skip lane 0 reserved for main)
+                    childLane = FindFirstFreeLane(state.ActiveLanes, skipLane0: true);
+                    childColor = state.NextColorIndex++;
+                }
+
+                EnsureLaneExists(childLane, state);
+
+                // Pre-assign the child's lane and color
+                state.CommitLanes[childSha] = childLane;
+                state.CommitColors[childSha] = childColor;
+
+                // Reserve the lane for this child
+                state.ActiveLanes[childLane] = childSha;
+
+                state.MaxLaneUsed = Math.Max(state.MaxLaneUsed, childLane);
+
+                // Draw BRANCH segment FROM current commit TO child's lane
+                row.Segments.Add(new GraphSegment
+                {
+                    FromLane = commitLane,
+                    ToLane = childLane,
+                    Kind = SegmentKind.Branch,
+                    ColorIndex = childColor
+                });
+
+                // Also draw vertical line in the child's lane continuing downward
+                row.Segments.Add(new GraphSegment
+                {
+                    FromLane = childLane,
+                    ToLane = childLane,
+                    Kind = SegmentKind.Vertical,
+                    ColorIndex = childColor
+                });
             }
-            return lane;
         }
+
+        #endregion
+
+        #region Utility Methods
+
+        private static int FindFirstFreeLane(List<string?> activeLanes, bool skipLane0 = false)
+        {
+            int startLane = skipLane0 ? 1 : 0;
+
+            for (int i = startLane; i < activeLanes.Count; i++)
+            {
+                if (activeLanes[i] == null)
+                    return i;
+            }
+
+            return activeLanes.Count;
+        }
+
+        private static void EnsureLaneExists(int lane, LayoutState state)
+        {
+            while (lane >= state.ActiveLanes.Count)
+            {
+                state.ActiveLanes.Add(null);
+            }
+        }
+
+        #endregion
     }
 }

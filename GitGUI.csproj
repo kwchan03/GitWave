@@ -44,4 +44,10 @@
     <EmbeddedResource Include="Assets\KeysightLogo.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ApplicationDefinition Update="App.xaml">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ApplicationDefinition>
+  </ItemGroup>
+
 </Project>

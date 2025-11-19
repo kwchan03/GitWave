@@ -41,6 +41,7 @@ namespace GitGUI
 
             // Register Pages
             services.AddTransient<LoginPage>();
+            services.AddTransient<PullRequestPage>();
             services.AddTransient<OperationPage>();
 
             // Register MainWindow
@@ -56,7 +57,8 @@ namespace GitGUI
             mainWindow.Show();
 
             // Navigate to LoginPage first
-            var loginPage = Services.GetRequiredService<LoginPage>();
+            //var loginPage = Services.GetRequiredService<LoginPage>();
+            var loginPage = Services.GetRequiredService<PullRequestPage>();
             mainWindow.NavigateTo(loginPage);
 
             //var window = new GitGUI.Pages.TestPlanView();

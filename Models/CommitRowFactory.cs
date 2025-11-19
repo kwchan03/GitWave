@@ -1,4 +1,6 @@
 ﻿// GitGUI.Models/CommitRowFactory.cs
+using GitGUI.Core;
+using GitGUI.ViewModels;
 using LibGit2Sharp;
 
 namespace GitGUI.Models
@@ -6,15 +8,20 @@ namespace GitGUI.Models
     public static class CommitRowFactory
     {
         // Build from LibGit2Sharp.Commit objects (use this for your graph pipeline)
-        public static List<CommitRow> FromCommits(IEnumerable<Commit> commits)
+        public static List<CommitRowViewModel> FromCommits(IEnumerable<Commit> commits, IGitService gitService)
         {
-            var list = commits.ToList();
-            var rows = new List<CommitRow>(list.Count);
-            foreach (var c in list)
+            return commits.Select(commit => new CommitRowViewModel(gitService)
             {
-                rows.Add(new CommitRow { Commit = c });
-            }
-            return rows;
+                Sha = commit.Sha,
+                ShortSha = commit.Sha.Substring(0, 7),
+                Message = commit.MessageShort,
+                Author = commit.Author.Name,
+                AuthorEmail = commit.Author.Email,
+                Committer = commit.Committer.Name,
+                CommitterEmail = commit.Committer.Email,
+                CommitDate = commit.Author.When.DateTime,
+                Parents = commit.Parents.Select(p => p.Sha).ToList(),
+            }).ToList();
         }
     }
 }

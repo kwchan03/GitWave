@@ -42,9 +42,18 @@
 
             <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Right" Margin="5">
                 <!-- Username -->
+                <Menu Grid.Column="1" VerticalAlignment="Center" Margin="20,0,20,0">
+                    <MenuItem Header="Operations" Padding="10,5">
+                        <MenuItem Header="Repository" 
+                                  Command="{Binding ShowRepositoryPageCommand}"/>
+                        <MenuItem Header="Pull Requests" 
+                                  Command="{Binding ShowPullRequestsPageCommand}"/>
+                    </MenuItem>
+                </Menu>
                 <TextBlock Text="{Binding AuthenticatedUser.Login}" 
-           VerticalAlignment="Center" 
-           FontWeight="SemiBold"/>
+                           VerticalAlignment="Center" 
+                           FontWeight="SemiBold"/>
+                
             </StackPanel>
 
             <GroupBox Grid.Row="1" Header="Repository" Margin="0,0,0,10">

@@ -60,6 +60,19 @@ namespace GitGUI.Services
             var signature = BuildSignature();
             _repo.Commit("Initial commit", signature, signature);
         }
+
+        public Repository GetRepository()
+        {
+            if (_repo == null)
+                throw new InvalidOperationException("Repository not opened.");
+            return _repo;
+        }
+
+        public bool TryGetRepository(out Repository repository)
+        {
+            repository = _repo;
+            return _repo != null;
+        }
         #endregion
 
         #region User Configuration
@@ -206,17 +219,26 @@ namespace GitGUI.Services
                         });
         }
 
-        public IEnumerable<Commit> FetchCommitsForGraph(int maxCount = 2000)
+        public IEnumerable<Commit> FetchCommitsForGraph()
         {
-            if (_repo == null) throw new InvalidOperationException("Repository not opened.");
+            if (_repo == null)
+                throw new InvalidOperationException("Repository not opened.");
 
             var filter = new CommitFilter
             {
                 IncludeReachableFrom = _repo.Branches,
-                SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time
+                SortBy = CommitSortStrategies.Topological  // Only this
             };
 
-            return _repo.Commits.QueryBy(filter).Take(maxCount).ToList(); // materialize
+            var commits = _repo.Commits.QueryBy(filter).ToList();
+
+            //// Fix order if reversed
+            //if (commits.Count > 1 && commits[0].Parents.Count() > 0)
+            //{
+            //    commits.Reverse();
+            //}
+
+            return commits;
         }
         #endregion
 

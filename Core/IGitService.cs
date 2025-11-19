@@ -7,8 +7,10 @@ namespace GitGUI.Core
     {
         void CreateRepository(string path);
         IEnumerable<CommitInfo> GetCommitLog(int maxCount = 50);
-        IEnumerable<Commit> FetchCommitsForGraph(int maxCount = 2000);
+        IEnumerable<Commit> FetchCommitsForGraph();
         bool OpenRepository(string repositoryPath);
+        Repository GetRepository();
+        bool TryGetRepository(out Repository repository);
         bool IsRepositoryOpen { get; }
 
         IEnumerable<BranchInfo> GetBranches();

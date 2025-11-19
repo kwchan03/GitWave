@@ -1,4 +1,5 @@
 ﻿using GitGUI.Models;
+using GitGUI.Services;
 using GitGUI.ViewModels;
 using System.Windows;
 using System.Windows.Media;
@@ -11,14 +12,16 @@ using Point = System.Windows.Point;
 namespace GitGUI.Controls
 {
     /// <summary>
-    /// Improved GraphCell with cleaner rendering logic
-    /// Key improvements:
-    /// - Simplified line drawing logic
-    /// - Better layering (draw in correct order)
-    /// - Cleaner connection handling
-    /// - Better performance with cached pens
+    /// Improved GraphCell with enhanced rendering logic
+    /// 
+    /// Key improvements from original:
+    /// - Respects CurveType from layout algorithm
+    /// - Branch lines are now straight (not curved)
+    /// - Vertical line logic simplified and unified
+    /// - Better control point support
+    /// - Cleaner, more maintainable code
     /// </summary>
-    public sealed class GraphCell : FrameworkElement
+    public sealed class GraphCellnew : FrameworkElement
     {
         #region Dependency Properties
 
@@ -76,7 +79,7 @@ namespace GitGUI.Controls
         private static readonly Pen[] CachedPens = CachedBrushes.Select(b => CreatePen(b, LineWidth)).ToArray();
         private static readonly Pen DotBorderPen = CreatePen(Brushes.White, DotBorderWidth);
 
-        static GraphCell()
+        static GraphCellnew()
         {
             // Freeze brushes and pens for better performance
             foreach (var brush in CachedBrushes)
@@ -101,7 +104,7 @@ namespace GitGUI.Controls
 
         #region Constructor
 
-        public GraphCell()
+        public GraphCellnew()
         {
             SnapsToDevicePixels = true;
             UseLayoutRounding = true;
@@ -148,16 +151,14 @@ namespace GitGUI.Controls
             public void Render()
             {
                 // Draw in specific order for proper layering:
-                // 1. Pass-through vertical lines (background)
-                // 2. Merge lines (from parent lanes to commit)
-                // 3. Branch lines (from commit to child lanes)
-                // 4. Primary lane connection lines (top to commit, commit to bottom)
-                // 5. Commit dot (foreground, always on top)
+                // 1. Vertical lines (all lanes continue straight)
+                // 2. Merge lines (converging from bottom)
+                // 3. Branch lines (diverging to top)
+                // 4. Commit dot (foreground, always on top)
 
-                DrawPassThroughLines();
+                DrawVerticalLines();
                 DrawMergeLines();
                 DrawBranchLines();
-                DrawPrimaryLaneLines();
                 DrawCommitDot();
             }
 
@@ -168,19 +169,20 @@ namespace GitGUI.Controls
             private Pen GetPen(int colorIndex) => CachedPens[colorIndex % CachedPens.Length];
 
             /// <summary>
-            /// Draw vertical lines for lanes that pass through this row
-            /// (not the primary lane, those are drawn separately)
+            /// Draw vertical lines for all lanes (pass-through and primary)
+            /// These represent commits continuing on their branch
+            /// 
+            /// IMPROVEMENT: Now includes primary lane (no need for separate method)
             /// </summary>
-            private void DrawPassThroughLines()
+            private void DrawVerticalLines()
             {
                 if (_row.Segments == null) return;
 
                 foreach (var segment in _row.Segments)
                 {
-                    // Only draw pass-through vertical lines (not the primary lane)
+                    // Draw all vertical pass-through segments
                     if (segment.Kind == SegmentKind.Vertical &&
-                        segment.FromLane == segment.ToLane &&
-                        segment.FromLane != _row.PrimaryLane)
+                        segment.FromLane == segment.ToLane)
                     {
                         double x = GetLaneX(segment.FromLane);
                         var pen = GetPen(segment.ColorIndex);
@@ -190,8 +192,10 @@ namespace GitGUI.Controls
             }
 
             /// <summary>
-            /// Draw merge lines: diagonal/curved lines from parent lanes TO commit
-            /// These represent merge parents connecting to this commit
+            /// Draw merge lines: lines from parent lanes TO this commit
+            /// These represent multiple branches converging into a merge commit
+            /// 
+            /// IMPROVEMENT: Now respects CurveType from layout algorithm!
             /// </summary>
             private void DrawMergeLines()
             {
@@ -201,21 +205,47 @@ namespace GitGUI.Controls
                 {
                     if (segment.Kind == SegmentKind.Merge)
                     {
-                        double x1 = GetLaneX(segment.ToLane);   // Parent lane (where line comes FROM in visual space)
-                        double x2 = GetLaneX(segment.FromLane); // Commit lane (where line goes TO)
+                        double x1 = GetLaneX(segment.ToLane);   // Parent lane
+                        double x2 = GetLaneX(segment.FromLane); // Commit lane
                         var pen = GetPen(segment.ColorIndex);
 
-                        // CRITICAL FIX: Merge lines go FROM parent (bottom) TO commit (mid)
-                        // The layout algorithm sets FromLane=commitLane, ToLane=parentLane
-                        // But visually, we draw from bottom (parent) up to mid (commit)
-                        DrawBezierCurve(_dc, pen, x1, _bottomY, x2, _midY);
+                        // IMPROVEMENT: Respect CurveType!
+                        // Merge lines can be straight OR curved based on layout decision
+                        if (segment.CurveType == CurveType.Straight)
+                        {
+                            // Straight line for simple merges
+                            _dc.DrawLine(pen, new Point(x1, _bottomY), new Point(x2, _midY));
+                        }
+                        else // CurveType.Bezier
+                        {
+                            // Smooth curve for more complex merges
+                            // Try to use explicit control points if provided
+                            if (segment.ControlPoint1.HasValue && segment.ControlPoint2.HasValue)
+                            {
+                                DrawBezierCurveWithControlPoints(
+                                    _dc, pen,
+                                    new Point(x1, _bottomY),
+                                    segment.ControlPoint1.Value,
+                                    segment.ControlPoint2.Value,
+                                    new Point(x2, _midY),
+                                    _laneWidth, _height);
+                            }
+                            else
+                            {
+                                // Fall back to auto-calculated control points
+                                DrawBezierCurve(_dc, pen, x1, _bottomY, x2, _midY);
+                            }
+                        }
                     }
                 }
             }
 
             /// <summary>
-            /// Draw branch lines: diagonal/curved lines from commit TO child lanes
-            /// These represent branches splitting off from this commit
+            /// Draw branch lines: lines from this commit TO child lanes
+            /// These represent a branch splitting off from the current commit
+            /// 
+            /// IMPROVEMENT: Branch lines are now STRAIGHT (not curved!)
+            /// This makes branches look cleaner and more intentional
             /// </summary>
             private void DrawBranchLines()
             {
@@ -229,33 +259,10 @@ namespace GitGUI.Controls
                         double x2 = GetLaneX(segment.ToLane);   // Child lane
                         var pen = GetPen(segment.ColorIndex);
 
-                        // Branch lines go FROM commit (mid) TO child (top)
-                        // The layout sets FromLane=commitLane, ToLane=childLane
-                        DrawBezierCurve(_dc, pen, x1, _midY, x2, _topY);
+                        // IMPROVEMENT: Branch lines are straight!
+                        // They cleanly split off without curves
+                        _dc.DrawLine(pen, new Point(x1, _midY), new Point(x2, _topY));
                     }
-                }
-            }
-
-            /// <summary>
-            /// Draw the primary lane vertical line for this commit
-            /// - Top half: from top of cell to commit dot (if HasIncomingConnection)
-            /// - Bottom half: from commit dot to bottom of cell (if HasOutgoingConnection)
-            /// </summary>
-            private void DrawPrimaryLaneLines()
-            {
-                double x = GetLaneX(_row.PrimaryLane);
-                var pen = GetPen(_row.BranchColorIndex);
-
-                // Draw line from top to commit if there's an incoming connection
-                if (_row.HasIncomingConnection)
-                {
-                    _dc.DrawLine(pen, new Point(x, _topY), new Point(x, _midY));
-                }
-
-                // Draw line from commit to bottom if there's an outgoing connection
-                if (_row.HasOutgoingConnection)
-                {
-                    _dc.DrawLine(pen, new Point(x, _midY), new Point(x, _bottomY));
                 }
             }
 
@@ -273,7 +280,7 @@ namespace GitGUI.Controls
             }
 
             /// <summary>
-            /// Draw a smooth cubic bezier curve between two points
+            /// Draw a smooth cubic Bézier curve between two points with auto-calculated control points
             /// </summary>
             private static void DrawBezierCurve(
                 DrawingContext dc,
@@ -281,8 +288,7 @@ namespace GitGUI.Controls
                 double x1, double y1,
                 double x2, double y2)
             {
-                // Create smooth cubic bezier curve
-                // Control points are positioned to create a natural curve
+                // Create smooth cubic Bézier curve
                 double controlOffset = Math.Abs(y2 - y1) * 0.5;
 
                 var start = new Point(x1, y1);
@@ -291,6 +297,44 @@ namespace GitGUI.Controls
                 // Place control points between start and end for smooth S-curve
                 var control1 = new Point(x1, y1 + (y2 > y1 ? controlOffset : -controlOffset));
                 var control2 = new Point(x2, y2 - (y2 > y1 ? controlOffset : -controlOffset));
+
+                var figure = new PathFigure
+                {
+                    StartPoint = start,
+                    Segments = { new BezierSegment(control1, control2, end, true) }
+                };
+
+                var geometry = new PathGeometry { Figures = { figure } };
+                dc.DrawGeometry(null, pen, geometry);
+            }
+
+            /// <summary>
+            /// Draw a Bézier curve using explicit control points from layout algorithm
+            /// This enables custom curve shapes beyond auto-calculation
+            /// </summary>
+            private static void DrawBezierCurveWithControlPoints(
+                DrawingContext dc,
+                Pen pen,
+                Point start,
+                (double x, double y) cp1Local,
+                (double x, double y) cp2Local,
+                Point end,
+                double laneWidth,
+                double cellHeight)
+            {
+                // Convert normalized control points to screen coordinates
+                // Note: Control points from layout are normalized (0-1)
+                // This is an example; adjust based on your layout algorithm's coordinate system
+
+                var control1 = new Point(
+                    start.X + (cp1Local.x * laneWidth),
+                    start.Y + (cp1Local.y * cellHeight)
+                );
+
+                var control2 = new Point(
+                    end.X + (cp2Local.x * laneWidth),
+                    end.Y + (cp2Local.y * cellHeight)
+                );
 
                 var figure = new PathFigure
                 {

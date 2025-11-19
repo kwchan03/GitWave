@@ -12,17 +12,24 @@ namespace GitGUI.Pages
     {
         public OperationPage(OperationViewModel vm)
         {
-            InitializeComponent();
-            DataContext = vm;
-
-            vm.PropertyChanged += (s, e) =>
+            try
             {
-                if (e.PropertyName == nameof(vm.OutputLog))
+                InitializeComponent();
+                DataContext = vm;
+                vm.PropertyChanged += (s, e) =>
                 {
-                    // Scroll to the end whenever OutputLog changes
-                    OutputTextBox.ScrollToEnd();
-                }
-            };
+                    if (e.PropertyName == nameof(vm.OutputLog))
+                    {
+                        if (OutputTextBox?.IsLoaded == true)
+                            OutputTextBox.ScrollToEnd();
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex}");
+                throw;
+            }
         }
 
         private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
