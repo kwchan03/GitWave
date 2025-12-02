@@ -24,6 +24,8 @@
             </Grid.RowDefinitions>
 
             <local:GraphCell Grid.RowSpan="2" Grid.Column="0" Row="{Binding}" 
+                             BranchPaths="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, 
+                         Path=DataContext.BranchPaths}"
                                 VerticalAlignment="Stretch"
                                 HorizontalAlignment="Stretch"
                                 IsHitTestVisible="False"/>

@@ -58,7 +58,7 @@ namespace GitGUI
 
             // Navigate to LoginPage first
             //var loginPage = Services.GetRequiredService<LoginPage>();
-            var loginPage = Services.GetRequiredService<PullRequestPage>();
+            var loginPage = Services.GetRequiredService<LoginPage>();
             mainWindow.NavigateTo(loginPage);
 
             //var window = new GitGUI.Pages.TestPlanView();

@@ -48,6 +48,21 @@ namespace GitGUI.Controls
             set => SetValue(LaneWidthProperty, value);
         }
 
+        /// <summary>
+        /// Branch paths computed by layouter - pass from parent ItemsControl
+        /// </summary>
+        public static readonly DependencyProperty BranchPathsProperty =
+            DependencyProperty.Register(
+                nameof(BranchPaths),
+                typeof(List<BranchPath>),
+                typeof(GraphCell),
+                new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+        public List<BranchPath> BranchPaths
+        {
+            get => (List<BranchPath>)GetValue(BranchPathsProperty);
+            set => SetValue(BranchPathsProperty, value);
+        }
         #endregion
 
         #region Rendering Constants
@@ -120,7 +135,7 @@ namespace GitGUI.Controls
             double height = RenderSize.Height;
             if (height <= 0) return;
 
-            var renderer = new CellRenderer(dc, Row, LaneWidth, height);
+            var renderer = new CellRenderer(dc, Row, BranchPaths, LaneWidth, height);
             renderer.Render();
         }
 
@@ -128,16 +143,18 @@ namespace GitGUI.Controls
         {
             private readonly DrawingContext _dc;
             private readonly CommitRowViewModel _row;
+            private readonly List<BranchPath> _branchPaths;
             private readonly double _laneWidth;
             private readonly double _height;
             private readonly double _midY;
             private readonly double _topY;
             private readonly double _bottomY;
 
-            public CellRenderer(DrawingContext dc, CommitRowViewModel row, double laneWidth, double height)
+            public CellRenderer(DrawingContext dc, CommitRowViewModel row, List<BranchPath> branchPaths, double laneWidth, double height)
             {
                 _dc = dc;
                 _row = row;
+                _branchPaths = branchPaths;
                 _laneWidth = laneWidth;
                 _height = height;
                 _midY = height / 2.0;
@@ -154,6 +171,7 @@ namespace GitGUI.Controls
                 // 4. Primary lane connection lines (top to commit, commit to bottom)
                 // 5. Commit dot (foreground, always on top)
 
+                DrawBranchPaths();
                 DrawPassThroughLines();
                 DrawMergeLines();
                 DrawBranchLines();
@@ -166,6 +184,59 @@ namespace GitGUI.Controls
             private Brush GetBrush(int colorIndex) => CachedBrushes[colorIndex % CachedBrushes.Length];
 
             private Pen GetPen(int colorIndex) => CachedPens[colorIndex % CachedPens.Length];
+
+            /// <summary>
+            /// Draw branch path lines that pass through this row.
+            /// 
+            /// For each branch path, check if this row is between two consecutive points.
+            /// If so, draw the line segment from point1 to point2.
+            /// 
+            /// This creates continuous visual lines even through empty rows!
+            /// </summary>
+            private void DrawBranchPaths()
+            {
+                if (_branchPaths == null || _branchPaths.Count == 0)
+                    return;
+
+                foreach (var path in _branchPaths)
+                {
+                    // For each pair of consecutive commits in this path
+                    for (int i = 0; i < path.Points.Count - 1; i++)
+                    {
+                        var (row1, lane1) = path.Points[i];
+                        var (row2, lane2) = path.Points[i + 1];
+
+                        // Check if current row is between row1 and row2
+                        int minRow = Math.Min(row1, row2);
+                        int maxRow = Math.Max(row1, row2);
+
+                        // ✓ KEY: Draw if current row is BETWEEN the two path points
+                        // This includes empty rows!
+                        if (_row.Row >= minRow && _row.Row <= maxRow)
+                        {
+                            double x1 = GetLaneX(lane1);
+                            double x2 = GetLaneX(lane2);
+                            var pen = GetPen(path.ColorIndex);
+
+                            if (x1 == x2)
+                            {
+                                // Vertical line (same lane - continuous through empty rows!)
+                                _dc.DrawLine(pen,
+                                    new Point(x1, _topY),
+                                    new Point(x1, _bottomY));
+                            }
+                            else
+                            {
+                                // Curve line (different lanes - merge happening)
+                                DrawBezierCurve(_dc, pen, x1, _topY, x2, _bottomY);
+                            }
+
+                            // Found the path segment for this row, move to next path
+                            return;
+                        }
+                    }
+                }
+            }
 
             /// <summary>
             /// Draw vertical lines for lanes that pass through this row
@@ -208,7 +279,10 @@ namespace GitGUI.Controls
                         // CRITICAL FIX: Merge lines go FROM parent (bottom) TO commit (mid)
                         // The layout algorithm sets FromLane=commitLane, ToLane=parentLane
                         // But visually, we draw from bottom (parent) up to mid (commit)
-                        DrawBezierCurve(_dc, pen, x1, _bottomY, x2, _midY);
+                        if (x1 == x2)
+                            _dc.DrawLine(pen, new Point(x1, _topY), new Point(x1, _bottomY));
+                        else
+                            DrawBezierCurve(_dc, pen, x1, _bottomY, x2, _midY);
                     }
                 }
             }
@@ -226,12 +300,15 @@ namespace GitGUI.Controls
                     if (segment.Kind == SegmentKind.Branch)
                     {
                         double x1 = GetLaneX(segment.FromLane); // Commit lane
-                        double x2 = GetLaneX(segment.ToLane);   // Child lane
+                        double x2 = GetLaneX(segment.ToLane);   // Parent lane
                         var pen = GetPen(segment.ColorIndex);
 
                         // Branch lines go FROM commit (mid) TO child (top)
                         // The layout sets FromLane=commitLane, ToLane=childLane
-                        DrawBezierCurve(_dc, pen, x1, _midY, x2, _topY);
+                        if (x1 == x2)
+                            _dc.DrawLine(pen, new Point(x1, _topY), new Point(x1, _bottomY));
+                        else
+                            DrawBezierCurve(_dc, pen, x1, _midY, x2, _topY);
                     }
                 }
             }

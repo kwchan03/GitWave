@@ -83,7 +83,7 @@ namespace GitGUI.ViewModels
                     return (list, maxLane);
                 }, token);
 
-                DebugDumpRows(rows, 60);
+                DebugDumpRows(rows);
 
                 foreach (var r in rows)
                     Items.Add(r);
@@ -119,13 +119,12 @@ namespace GitGUI.ViewModels
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         // Debug helper - put this inside CommitGraphVM
-        private void DebugDumpRows(IEnumerable<CommitRowViewModel> rows, int count = 40)
+        private void DebugDumpRows(IEnumerable<CommitRowViewModel> rows)
         {
             System.Diagnostics.Debug.WriteLine("=== CommitGraph DebugDumpRows ===");
             int i = 0;
             foreach (var r in rows)
             {
-                if (i++ >= count) break;
                 var segs = r.Segments.Count == 0 ? "(no-segs)" :
                            string.Join(", ", r.Segments.Select(s => $"{s.Kind}[{s.FromLane}->{s.ToLane}]"));
                 var parents = r.Parents != null && r.Parents.Count > 0 ? string.Join(",", r.Parents.Take(3)) : "(no-parents)";

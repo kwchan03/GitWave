@@ -1,6 +1,7 @@
 ﻿using GitGUI.Core;
 using GitGUI.Models;
 using LibGit2Sharp;
+using System.Diagnostics;
 using System.IO;
 
 namespace GitGUI.Services
@@ -227,10 +228,12 @@ namespace GitGUI.Services
             var filter = new CommitFilter
             {
                 IncludeReachableFrom = _repo.Branches,
-                SortBy = CommitSortStrategies.Topological  // Only this
+                SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time // Only this
             };
 
             var commits = _repo.Commits.QueryBy(filter).ToList();
+
+            DebugPrintCommits(commits);
 
             //// Fix order if reversed
             //if (commits.Count > 1 && commits[0].Parents.Count() > 0)
@@ -239,6 +242,44 @@ namespace GitGUI.Services
             //}
 
             return commits;
+        }
+
+        private void DebugPrintCommits(List<Commit> commits)
+        {
+            Debug.WriteLine("\n╔" + new string('═', 98) + "╗");
+            Debug.WriteLine("║ COMMIT ORDER DEBUG" + new string(' ', 79) + "║");
+            Debug.WriteLine("╚" + new string('═', 98) + "╝");
+            Debug.WriteLine($"Total commits: {commits.Count}\n");
+
+            for (int i = 0; i < commits.Count; i++)
+            {
+                var c = commits[i];
+                var msg = c.Message.Split('\n')[0];
+                if (msg.Length > 40) msg = msg.Substring(0, 37) + "...";
+
+                Debug.WriteLine($"[{i,2}] {c.Sha.Substring(0, 7)} {c.Author.When:yyyy-MM-dd HH:mm}  {msg,-40}  Parents: {c.Parents.Count()}");
+            }
+
+            Debug.WriteLine("");
+
+            if (commits.Count >= 2)
+            {
+                var first = commits[0].Author.When;
+                var last = commits[commits.Count - 1].Author.When;
+
+                Debug.WriteLine($"First: {commits[0].Sha.Substring(0, 7)} ({first:yyyy-MM-dd})");
+                Debug.WriteLine($"Last:  {commits[commits.Count - 1].Sha.Substring(0, 7)} ({last:yyyy-MM-dd})");
+                Debug.WriteLine("");
+
+                if (first > last)
+                    Debug.WriteLine("✓ NEWEST → OLDEST");
+                else if (first < last)
+                    Debug.WriteLine("✗ OLDEST → NEWEST (Layout expects this!)");
+                else
+                    Debug.WriteLine("⚠️  SAME DATE");
+            }
+
+            Debug.WriteLine("╔" + new string('═', 98) + "╗\n");
         }
         #endregion
 

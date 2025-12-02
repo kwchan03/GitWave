@@ -24,15 +24,15 @@ namespace GitGUI.ViewModels
         public required string AuthorEmail { get; init; }
         public required string Committer { get; init; }
         public required string CommitterEmail { get; init; }
-        public required DateTime CommitDate { get; init; }
+        public required DateTime CommitDate { get; init; } = DateTime.Now;
         public required IReadOnlyList<string> Parents { get; init; }
         public IReadOnlyList<string> Children { get; set; } = new List<string>();
-        public int Row { get; set; } = -1;
 
         // --- Graph Layout ---
+        public int Row { get; set; }
         public int PrimaryLane { get; set; }
         public int BranchColorIndex { get; set; }
-        public ObservableCollection<GraphSegment> Segments { get; } = new();
+        public List<GraphSegment> Segments { get; set; } = new();
         public bool HasIncomingConnection { get; set; }
         public bool HasOutgoingConnection { get; set; }
 

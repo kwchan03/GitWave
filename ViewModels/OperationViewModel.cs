@@ -44,7 +44,7 @@ namespace GitGUI.ViewModels
             get => _currentBranch;
             private set => SetProperty(ref _currentBranch, value);
         }
-        public CommitGraphVM Graph { get; }
+        public CommitGraphViewModel Graph { get; }
 
         // ---------------------------
         // Collections
@@ -100,7 +100,7 @@ namespace GitGUI.ViewModels
         public OperationViewModel(IGitService git)
         {
             _git = git ?? throw new ArgumentNullException(nameof(git));
-            Graph = new CommitGraphVM(_git);
+            Graph = new CommitGraphViewModel(_git);
 
             // ---------------------------
             // Repo operations
