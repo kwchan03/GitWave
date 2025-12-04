@@ -9,5 +9,7 @@
         public int ToLane { get; set; }
         public SegmentKind Kind { get; set; }
         public int ColorIndex { get; set; }
+        public bool IsStart { get; set; } = false;
+        public bool IsEnd { get; set; } = false;
     }
 }

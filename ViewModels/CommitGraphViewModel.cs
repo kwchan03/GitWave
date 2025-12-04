@@ -82,8 +82,6 @@ namespace GitGUI.ViewModels
                     var layouter = new CommitGraphLayouter();
                     layouter.Layout(list);
 
-                    //// Reverse AFTER layout (doesn't affect algorithm)
-                    //list.Reverse();
                     int maxLane = list.Count > 0 ? list.Max(r => r.PrimaryLane) : 0;
                     return (list, maxLane);
                 }, token);
@@ -131,7 +129,7 @@ namespace GitGUI.ViewModels
             foreach (var r in rows)
             {
                 var segs = r.Segments.Count == 0 ? "(no-segs)" :
-                           string.Join(", ", r.Segments.Select(s => $"{s.Kind}[{s.FromLane}->{s.ToLane}]"));
+                           string.Join(", ", r.Segments.Select(s => $"[{s.FromLane}->{s.ToLane}]"));
                 var parents = r.Parents != null && r.Parents.Count > 0 ? string.Join(",", r.Parents.Take(3)) : "(no-parents)";
                 System.Diagnostics.Debug.WriteLine($"{i,3}: {r.Sha[..7]} lane={r.PrimaryLane} segs={segs} parents={parents}");
                 i++;

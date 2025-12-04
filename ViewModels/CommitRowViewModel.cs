@@ -26,7 +26,6 @@ namespace GitGUI.ViewModels
         public required string CommitterEmail { get; init; }
         public required DateTime CommitDate { get; init; } = DateTime.Now;
         public required IReadOnlyList<string> Parents { get; init; }
-        public IReadOnlyList<string> Children { get; set; } = new List<string>();
 
         // --- Graph Layout ---
         public int Row { get; set; }
@@ -37,12 +36,7 @@ namespace GitGUI.ViewModels
         public bool HasOutgoingConnection { get; set; }
 
         // --- Derived State ---
-        public bool IsMergeCommit => Parents.Count > 1;
         public bool IsRootCommit => Parents.Count == 0;
-        public bool IsBranchPoint => Children.Count > 1;
-
-        public IReadOnlyList<string> BranchChildren => Children;
-        public IReadOnlyList<string> MergeChildren => new List<string>();
 
         // --- UI Expansion ---
         private bool _isExpanded;

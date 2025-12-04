@@ -47,22 +47,6 @@ namespace GitGUI.Controls
             get => (double)GetValue(LaneWidthProperty);
             set => SetValue(LaneWidthProperty, value);
         }
-
-        /// <summary>
-        /// Branch paths computed by layouter - pass from parent ItemsControl
-        /// </summary>
-        public static readonly DependencyProperty BranchPathsProperty =
-            DependencyProperty.Register(
-                nameof(BranchPaths),
-                typeof(List<BranchPath>),
-                typeof(GraphCell),
-                new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-
-        public List<BranchPath> BranchPaths
-        {
-            get => (List<BranchPath>)GetValue(BranchPathsProperty);
-            set => SetValue(BranchPathsProperty, value);
-        }
         #endregion
 
         #region Rendering Constants
@@ -71,50 +55,51 @@ namespace GitGUI.Controls
         private const double LineWidth = 2.0;
         private const double DotBorderWidth = 2.0;
 
-        // Professional color palette (inspired by GitKraken/SourceTree)
         private static readonly Color[] BranchColors = new[]
         {
-            Color.FromRgb(64, 158, 255),    // Blue
-            Color.FromRgb(103, 194, 58),    // Green
-            Color.FromRgb(245, 166, 35),    // Orange
-            Color.FromRgb(208, 2, 27),      // Red
-            Color.FromRgb(126, 87, 194),    // Purple
-            Color.FromRgb(0, 188, 212),     // Cyan
-            Color.FromRgb(255, 152, 0),     // Amber
-            Color.FromRgb(156, 39, 176),    // Deep Purple
-            Color.FromRgb(0, 150, 136),     // Teal
-            Color.FromRgb(255, 87, 34)      // Deep Orange
+            Color.FromRgb(1, 10, 64),     // #010A40
+            Color.FromRgb(252, 66, 201),  // #FC42C9
+            Color.FromRgb(61, 145, 240),  // #3D91F0
+            Color.FromRgb(41, 227, 193),  // #29E3C1
+            Color.FromRgb(197, 161, 90),  // #C5A15A
+            Color.FromRgb(250, 121, 120), // #FA7978
+            Color.FromRgb(93, 98, 128),   // #5D6280
+            Color.FromRgb(90, 197, 141),  // #5AC58D
+            Color.FromRgb(92, 90, 197),   // #5C5AC5
+            Color.FromRgb(235, 115, 64)   // #EB7340
         };
 
         // Cached brushes and pens for performance
-        private static readonly Brush[] CachedBrushes = BranchColors.Select(c => new SolidColorBrush(c)).ToArray();
-        private static readonly Pen[] CachedPens = CachedBrushes.Select(b => CreatePen(b, LineWidth)).ToArray();
-        private static readonly Pen DotBorderPen = CreatePen(Brushes.White, DotBorderWidth);
+        private static readonly Brush[] CachedBrushes;
+        private static readonly Pen[] CachedPens;
+        private static readonly Pen DotBorderPen;
 
         static GraphCell()
         {
             // Freeze brushes and pens for better performance
-            foreach (var brush in CachedBrushes)
-                brush.Freeze();
-            foreach (var pen in CachedPens)
-                pen.Freeze();
+            CachedBrushes = BranchColors.Select(c =>
+            {
+                var b = new SolidColorBrush(c);
+                b.Freeze();
+                return b;
+            }).ToArray();
+
+            CachedPens = CachedBrushes.Select(b =>
+            {
+                var p = new Pen(b, LineWidth)
+                {
+                    StartLineCap = PenLineCap.Round,
+                    EndLineCap = PenLineCap.Round,
+                    LineJoin = PenLineJoin.Round
+                };
+                p.Freeze();
+                return p;
+            }).ToArray();
+
+            DotBorderPen = new Pen(Brushes.White, DotBorderWidth);
             DotBorderPen.Freeze();
         }
-
-        private static Pen CreatePen(Brush brush, double thickness)
-        {
-            var pen = new Pen(brush, thickness)
-            {
-                StartLineCap = PenLineCap.Round,
-                EndLineCap = PenLineCap.Round,
-                LineJoin = PenLineJoin.Round
-            };
-            return pen;
-        }
-
         #endregion
-
-        #region Constructor
 
         public GraphCell()
         {
@@ -122,20 +107,18 @@ namespace GitGUI.Controls
             UseLayoutRounding = true;
         }
 
-        #endregion
-
         #region Rendering
 
         protected override void OnRender(DrawingContext dc)
         {
-            base.OnRender(dc);
+            //base.OnRender(dc);
 
             if (Row == null) return;
 
-            double height = RenderSize.Height;
-            if (height <= 0) return;
+            // Safety check for size
+            if (RenderSize.Width <= 0 || RenderSize.Height <= 0) return;
 
-            var renderer = new CellRenderer(dc, Row, BranchPaths, LaneWidth, height);
+            var renderer = new CellRenderer(dc, Row, LaneWidth, RenderSize.Height);
             renderer.Render();
         }
 
@@ -143,39 +126,27 @@ namespace GitGUI.Controls
         {
             private readonly DrawingContext _dc;
             private readonly CommitRowViewModel _row;
-            private readonly List<BranchPath> _branchPaths;
             private readonly double _laneWidth;
-            private readonly double _height;
             private readonly double _midY;
             private readonly double _topY;
             private readonly double _bottomY;
 
-            public CellRenderer(DrawingContext dc, CommitRowViewModel row, List<BranchPath> branchPaths, double laneWidth, double height)
+            public CellRenderer(DrawingContext dc, CommitRowViewModel row, double laneWidth, double height)
             {
                 _dc = dc;
                 _row = row;
-                _branchPaths = branchPaths;
                 _laneWidth = laneWidth;
-                _height = height;
-                _midY = height / 2.0;
-                _topY = -1.0; // Extend slightly beyond cell for seamless lines
+                _midY = height * 0.5;
+                _topY = -1.0; // Extend lines slightly outside bounds to prevent anti-aliasing gaps between rows
                 _bottomY = height + 1.0;
             }
 
             public void Render()
             {
-                // Draw in specific order for proper layering:
-                // 1. Pass-through vertical lines (background)
-                // 2. Merge lines (from parent lanes to commit)
-                // 3. Branch lines (from commit to child lanes)
-                // 4. Primary lane connection lines (top to commit, commit to bottom)
-                // 5. Commit dot (foreground, always on top)
+                // 2. Middle: Curves (Merge & Branch)
+                DrawConnections();
 
-                DrawBranchPaths();
-                DrawPassThroughLines();
-                DrawMergeLines();
-                DrawBranchLines();
-                DrawPrimaryLaneLines();
+                // 4. Foreground: Commit Dot
                 DrawCommitDot();
             }
 
@@ -185,155 +156,65 @@ namespace GitGUI.Controls
 
             private Pen GetPen(int colorIndex) => CachedPens[colorIndex % CachedPens.Length];
 
-            /// <summary>
-            /// Draw branch path lines that pass through this row.
-            /// 
-            /// For each branch path, check if this row is between two consecutive points.
-            /// If so, draw the line segment from point1 to point2.
-            /// 
-            /// This creates continuous visual lines even through empty rows!
-            /// </summary>
-            private void DrawBranchPaths()
+            private void DrawConnections()
             {
-                if (_branchPaths == null || _branchPaths.Count == 0)
-                    return;
-
-                foreach (var path in _branchPaths)
+                foreach (var seg in _row.Segments)
                 {
-                    // For each pair of consecutive commits in this path
-                    for (int i = 0; i < path.Points.Count - 1; i++)
+                    if (seg.Kind == SegmentKind.Vertical)
                     {
-                        var (row1, lane1) = path.Points[i];
-                        var (row2, lane2) = path.Points[i + 1];
+                        DrawVerticalSegment(seg);
+                    }
 
-                        // Check if current row is between row1 and row2
-                        int minRow = Math.Min(row1, row2);
-                        int maxRow = Math.Max(row1, row2);
+                    var pen = GetPen(seg.ColorIndex);
 
-                        // ✓ KEY: Draw if current row is BETWEEN the two path points
-                        // This includes empty rows!
-                        if (_row.Row >= minRow && _row.Row <= maxRow)
-                        {
-                            double x1 = GetLaneX(lane1);
-                            double x2 = GetLaneX(lane2);
-                            var pen = GetPen(path.ColorIndex);
-
-                            if (x1 == x2)
-                            {
-                                // Vertical line (same lane - continuous through empty rows!)
-                                _dc.DrawLine(pen,
-                                    new Point(x1, _topY),
-                                    new Point(x1, _bottomY));
-                            }
-                            else
-                            {
-                                // Curve line (different lanes - merge happening)
-                                DrawBezierCurve(_dc, pen, x1, _topY, x2, _bottomY);
-                            }
-
-                            // Found the path segment for this row, move to next path
-                            return;
-                        }
+                    if (seg.Kind == SegmentKind.Merge)
+                    {
+                        // Child (Mid) -> Parent (Bottom)
+                        double xChild = GetLaneX(seg.FromLane);
+                        double xParent = GetLaneX(seg.ToLane);
+                        DrawBezierCurve(_dc, pen, xChild, _midY, xParent, _bottomY);
+                    }
+                    else if (seg.Kind == SegmentKind.Branch)
+                    {
+                        // Child (Top) -> Parent (Mid)
+                        // Note: FromLane is Child, ToLane is Parent (Me)
+                        double xChild = GetLaneX(seg.FromLane);
+                        double xParent = GetLaneX(seg.ToLane);
+                        DrawBezierCurve(_dc, pen, xChild, _topY, xParent, _midY);
                     }
                 }
             }
 
-            /// <summary>
-            /// Draw vertical lines for lanes that pass through this row
-            /// (not the primary lane, those are drawn separately)
-            /// </summary>
-            private void DrawPassThroughLines()
+            private void DrawVerticalSegment(GraphSegment seg)
             {
-                if (_row.Segments == null) return;
+                double x = GetLaneX(seg.FromLane);
+                var pen = GetPen(seg.ColorIndex);
 
-                foreach (var segment in _row.Segments)
-                {
-                    // Only draw pass-through vertical lines (not the primary lane)
-                    if (segment.Kind == SegmentKind.Vertical &&
-                        segment.FromLane == segment.ToLane &&
-                        segment.FromLane != _row.PrimaryLane)
-                    {
-                        double x = GetLaneX(segment.FromLane);
-                        var pen = GetPen(segment.ColorIndex);
-                        _dc.DrawLine(pen, new Point(x, _topY), new Point(x, _bottomY));
-                    }
-                }
+                bool hasTop = seg.IsEnd;
+                bool hasBottom = seg.IsStart;
+
+                if (hasTop)
+                    _dc.DrawLine(pen, new Point(x, _topY), new Point(x, _midY));    // Ends Here
+                else if (hasBottom)
+                    _dc.DrawLine(pen, new Point(x, _midY), new Point(x, _bottomY)); // Starts Here
+                else
+                    _dc.DrawLine(pen, new Point(x, _topY), new Point(x, _bottomY));   // Full Pass-Through
             }
 
-            /// <summary>
-            /// Draw merge lines: diagonal/curved lines from parent lanes TO commit
-            /// These represent merge parents connecting to this commit
-            /// </summary>
-            private void DrawMergeLines()
+            private void DrawCurvedSegment(GraphSegment seg)
             {
-                if (_row.Segments == null) return;
+                var pen = GetPen(seg.ColorIndex);
 
-                foreach (var segment in _row.Segments)
-                {
-                    if (segment.Kind == SegmentKind.Merge)
-                    {
-                        double x1 = GetLaneX(segment.ToLane);   // Parent lane (where line comes FROM in visual space)
-                        double x2 = GetLaneX(segment.FromLane); // Commit lane (where line goes TO)
-                        var pen = GetPen(segment.ColorIndex);
+                // FromLane = Commit Lane (Mid)
+                // ToLane   = Parent Lane (Bottom) 
+                // (Assuming Layouter generates segments TO parents)
 
-                        // CRITICAL FIX: Merge lines go FROM parent (bottom) TO commit (mid)
-                        // The layout algorithm sets FromLane=commitLane, ToLane=parentLane
-                        // But visually, we draw from bottom (parent) up to mid (commit)
-                        if (x1 == x2)
-                            _dc.DrawLine(pen, new Point(x1, _topY), new Point(x1, _bottomY));
-                        else
-                            DrawBezierCurve(_dc, pen, x1, _bottomY, x2, _midY);
-                    }
-                }
-            }
+                double xCommit = GetLaneX(seg.FromLane);
+                double xParent = GetLaneX(seg.ToLane);
 
-            /// <summary>
-            /// Draw branch lines: diagonal/curved lines from commit TO child lanes
-            /// These represent branches splitting off from this commit
-            /// </summary>
-            private void DrawBranchLines()
-            {
-                if (_row.Segments == null) return;
-
-                foreach (var segment in _row.Segments)
-                {
-                    if (segment.Kind == SegmentKind.Branch)
-                    {
-                        double x1 = GetLaneX(segment.FromLane); // Commit lane
-                        double x2 = GetLaneX(segment.ToLane);   // Parent lane
-                        var pen = GetPen(segment.ColorIndex);
-
-                        // Branch lines go FROM commit (mid) TO child (top)
-                        // The layout sets FromLane=commitLane, ToLane=childLane
-                        if (x1 == x2)
-                            _dc.DrawLine(pen, new Point(x1, _topY), new Point(x1, _bottomY));
-                        else
-                            DrawBezierCurve(_dc, pen, x1, _midY, x2, _topY);
-                    }
-                }
-            }
-
-            /// <summary>
-            /// Draw the primary lane vertical line for this commit
-            /// - Top half: from top of cell to commit dot (if HasIncomingConnection)
-            /// - Bottom half: from commit dot to bottom of cell (if HasOutgoingConnection)
-            /// </summary>
-            private void DrawPrimaryLaneLines()
-            {
-                double x = GetLaneX(_row.PrimaryLane);
-                var pen = GetPen(_row.BranchColorIndex);
-
-                // Draw line from top to commit if there's an incoming connection
-                if (_row.HasIncomingConnection)
-                {
-                    _dc.DrawLine(pen, new Point(x, _topY), new Point(x, _midY));
-                }
-
-                // Draw line from commit to bottom if there's an outgoing connection
-                if (_row.HasOutgoingConnection)
-                {
-                    _dc.DrawLine(pen, new Point(x, _midY), new Point(x, _bottomY));
-                }
+                // Draw curve from Commit (Mid) to Parent (Bottom)
+                // Note: We use _bottomY to represent the direction towards the parent row
+                DrawBezierCurve(_dc, pen, xCommit, _midY, xParent, _bottomY);
             }
 
             /// <summary>
@@ -358,25 +239,61 @@ namespace GitGUI.Controls
                 double x1, double y1,
                 double x2, double y2)
             {
-                // Create smooth cubic bezier curve
-                // Control points are positioned to create a natural curve
-                double controlOffset = Math.Abs(y2 - y1) * 0.5;
+                // This logic creates the "Git Graph" look where lines leave vertically
+                // and enter vertically, rather than diagonally.
+
+                // Control point 1: Maintain X of start, move vertically towards end
+                // Control point 2: Maintain X of end, move vertically from start
+
+                double height = Math.Abs(y2 - y1);
+
+                // Tension factor: 0.5 is standard smooth, higher makes it turn sharper later
+                double tension = 0.5;
+                double offset = height * tension;
 
                 var start = new Point(x1, y1);
                 var end = new Point(x2, y2);
 
-                // Place control points between start and end for smooth S-curve
-                var control1 = new Point(x1, y1 + (y2 > y1 ? controlOffset : -controlOffset));
-                var control2 = new Point(x2, y2 - (y2 > y1 ? controlOffset : -controlOffset));
+                // If drawing Bottom -> Mid (Merge): y1 > y2
+                // CP1 should go UP (negative Y)
+                // If drawing Mid -> Top (Branch): y1 > y2
+                // CP1 should go UP (negative Y)
 
-                var figure = new PathFigure
-                {
-                    StartPoint = start,
-                    Segments = { new BezierSegment(control1, control2, end, true) }
-                };
+                double dir = (y2 > y1) ? 1.0 : -1.0;
 
-                var geometry = new PathGeometry { Figures = { figure } };
-                dc.DrawGeometry(null, pen, geometry);
+                var cp1 = new Point(x1, y1 + (offset * dir));
+                var cp2 = new Point(x2, y2 - (offset * dir));
+
+                // Optimization: Use StreamGeometry for complex paths if heavily used, 
+                // but for single curves, DrawGeometry with simple Bezier is fine.
+                // However, direct DrawGeometry with explicit points is slightly heavier than needed
+                // but simplest to implement without StreamGeometryContext boiler-plate.
+
+                var bezier = new BezierSegment(cp1, cp2, end, true);
+                var fig = new PathFigure(start, new[] { bezier }, false);
+                var geom = new PathGeometry(new[] { fig });
+
+                dc.DrawGeometry(null, pen, geom);
+
+                //// Create smooth cubic bezier curve
+                //// Control points are positioned to create a natural curve
+                //double controlOffset = Math.Abs(y2 - y1) * 0.5;
+
+                //var start = new Point(x1, y1);
+                //var end = new Point(x2, y2);
+
+                //// Place control points between start and end for smooth S-curve
+                //var control1 = new Point(x1, y1 + (y2 > y1 ? controlOffset : -controlOffset));
+                //var control2 = new Point(x2, y2 - (y2 > y1 ? controlOffset : -controlOffset));
+
+                //var figure = new PathFigure
+                //{
+                //    StartPoint = start,
+                //    Segments = { new BezierSegment(control1, control2, end, true) }
+                //};
+
+                //var geometry = new PathGeometry { Figures = { figure } };
+                //dc.DrawGeometry(null, pen, geometry);
             }
         }
 

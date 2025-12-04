@@ -12,9 +12,10 @@ namespace GitGUI.Services
     {
         private Dictionary<string, int> _lanes = new();
         private Dictionary<string, int> _colors = new();
+        private List<int> _lastRowForColor = new();
+        private Dictionary<string, List<CommitRowViewModel>> _childrenMap;
         private List<List<ColumnSegment>> _columnSegments = new();
         private int _nextColorIndex = 0;
-        private List<BranchPath> _branchPaths = new();
 
         // Debug helper
         private int _commitProcessCount = 0;
@@ -23,6 +24,7 @@ namespace GitGUI.Services
         {
             _lanes.Clear();
             _colors.Clear();
+            _lastRowForColor.Clear();
             _columnSegments.Clear();
             _nextColorIndex = 0;
             _commitProcessCount = 0;
@@ -32,10 +34,10 @@ namespace GitGUI.Services
             Debug.WriteLine("\n========== LAYOUT START ==========");
             Debug.WriteLine($"[Layout] Processing {commits.Count} commits");
 
-            var childrenMap = BuildChildrenMap(commits);
+            _childrenMap = BuildChildrenMap(commits);
 
             Debug.WriteLine("\n--- Children Map ---");
-            foreach (var kvp in childrenMap.Where(x => x.Value.Count > 0))
+            foreach (var kvp in _childrenMap.Where(x => x.Value.Count > 0))
             {
                 Debug.WriteLine($"  {kvp.Key.Substring(0, 7)} → {kvp.Value.Count} children");
             }
@@ -44,7 +46,7 @@ namespace GitGUI.Services
             for (int i = 0; i < commits.Count; i++)
             {
                 var commit = commits[i];
-                var children = childrenMap[commit.Sha];
+                var children = _childrenMap[commit.Sha];
 
                 Debug.WriteLine($"\n[Commit {_commitProcessCount++}] {commit.Sha.Substring(0, 7)} (Row {commit.Row})");
                 Debug.WriteLine($"  Children: {children.Count}");
@@ -66,27 +68,42 @@ namespace GitGUI.Services
                 // Save it so parents can see it later
                 _lanes[commit.Sha] = lane;
 
-                if (children.Count > 0)
+                // 1. Determine "Primary" children (Children who consider ME their main parent)
+                // This is the definition of "Branch Continuity"
+                var primaryChildren = children
+                    .Where(c => c.Parents != null && c.Parents.Count > 0 && c.Parents[0] == commit.Sha)
+                    .ToList();
+
+                int assignedColor;
+
+                if (branchChildren.Count > 0)
                 {
-                    _colors[commit.Sha] = _colors.GetValueOrDefault(children[0].Sha, 0);
-                    Debug.WriteLine($"  Color (inherited): {_colors[commit.Sha]}");
+                    // CASE A: CONTINUATION (Inherit from Segment)
+                    var existingSegment = _columnSegments[lane].Last();
+                    assignedColor = existingSegment.ColorIndex;
                 }
                 else
                 {
-                    _colors[commit.Sha] = _nextColorIndex++;
-                    Debug.WriteLine($"  Color (new): {_colors[commit.Sha]}");
+                    // CASE B: NEW SEGMENT (Get Free Color)
+                    assignedColor = GetFirstFreeColor(commit.Row);
                 }
+
+                _colors[commit.Sha] = assignedColor;
+
+                // CRITICAL: Mark this color as CURRENTLY ACTIVE
+                // It doesn't matter if it's new or old; it is now flowing through this commit.
+                UpdateColorState(assignedColor, int.MaxValue);
 
                 // Update segments using the new logic
                 // Note: We pass 'isContinuation' so we know whether to Add or Extend
                 bool isContinuation = branchChildren.Count > 0;
                 UpdateLaneState(commit, lane, minChildRow, isContinuation);
-                //CreateSegments(commit, lane, commit.Row);
             }
 
             Debug.WriteLine("\n========== APPLYING RESULTS ==========");
             ApplyResults(commits);
             Debug.WriteLine("========== LAYOUT END ==========\n");
+            PrintDebugInfo(commits);
         }
 
         private Dictionary<string, List<CommitRowViewModel>> BuildChildrenMap(
@@ -182,6 +199,7 @@ namespace GitGUI.Services
                             // Cut it short. 
                             // This creates the whitespace needed for the curve.
                             lastSegment.EndRow = commit.Row - 1;
+                            UpdateColorState(lastSegment.ColorIndex, lastSegment.EndRow);
                         }
                     }
                 }
@@ -302,6 +320,36 @@ namespace GitGUI.Services
             return newLane;
         }
 
+        private int GetFirstFreeColor(int currentRow)
+        {
+            // 1. Check existing colors
+            for (int i = 0; i < _lastRowForColor.Count; i++)
+            {
+                // If the color hasn't been used since "currentRow - 2", it is free.
+                // (currentRow - 1) means it ended immediately above us, so it's visually "touching".
+                Debug.WriteLine($"      last row: {_lastRowForColor[i]} current row: {currentRow}");
+                if (_lastRowForColor[i] < currentRow - 1)
+                {
+                    return i;
+                }
+            }
+
+            // 2. No gaps found? Create a new color index.
+            _lastRowForColor.Add(-1); // Initialize placeholder
+            return _lastRowForColor.Count - 1;
+        }
+
+        private void UpdateColorState(int colorIndex, int rowValue)
+        {
+            // Ensure list is big enough
+            while (_lastRowForColor.Count <= colorIndex)
+            {
+                _lastRowForColor.Add(-1); // Initialize as "Never used"
+            }
+
+            _lastRowForColor[colorIndex] = rowValue;
+        }
+
         private void UpdateLaneState(CommitRowViewModel commit, int lane, int minChildRow, bool isContinuation)
         {
             // Ensure list exists
@@ -310,65 +358,47 @@ namespace GitGUI.Services
 
             if (isContinuation)
             {
-                // CASE 1: Continuing an existing branch.
-                // The segment should ALREADY be Open (EndRow = MaxValue).
-                // We don't need to do anything. It automatically "extends" to this row.
-
-                // Sanity check (optional):
+                // CASE 1: CONTINUATION
+                // The segment is already falling through.
+                // Sanity Check: Ensure it's open.
                 if (segments.Count > 0 && segments.Last().EndRow != int.MaxValue)
                 {
-                    // If this happens, logic elsewhere closed it prematurely.
-                    // Re-open it or log error.
-                    System.Diagnostics.Debug.WriteLine($"[Warning] Continuing segment on lane {lane} but last segment is not open.");
+                    segments.Last().EndRow = int.MaxValue;
+                }
+
+                // FIX FOR LAST COMMIT (Oldest in Repo):
+                // If this commit has NO parents, we must CLOSE the segment here.
+                if (commit.Parents == null || commit.Parents.Count == 0)
+                {
+                    segments.Last().EndRow = commit.Row;
                 }
             }
             else
             {
-                // CASE 2: Starting a NEW line (Branch Tip or Merge Jump)
-                // We start a segment that goes from "Top" down to "Infinity".
+                // CASE 2: NEW SEGMENT (Tip or Merge Jump)
 
-                // If we have children (Merge), visual line starts at minChildRow + 1
-                // If we have NO children (Branch Tip), visual line starts at commit.Row
-                int start = (commit.Parents == null || commit.Parents.Count == 0)
-                  ? commit.Row
-                  : minChildRow + 1;
+                int start;
+
+                // >>> BUG FIX START <<<
+                // If minChildRow equals our row, it means we have NO children above us.
+                // We are the TIP of a branch. We must start exactly here.
+                if (minChildRow == commit.Row)
+                {
+                    start = commit.Row;
+                }
+                else
+                {
+                    // We have children, but we are starting a NEW line (Merge Jump).
+                    // Start slightly below the child to allow curve connection.
+                    start = minChildRow + 1;
+                }
 
                 segments.Add(new ColumnSegment
                 {
                     StartRow = start,
-                    EndRow = int.MaxValue // Mark as Active/Open
+                    EndRow = int.MaxValue, // Mark as Active/Open
+                    ColorIndex = _colors.ContainsKey(commit.Sha) ? _colors[commit.Sha] : 0
                 });
-            }
-        }
-
-        private void CreateSegments(CommitRowViewModel commit, int lane, int row)
-        {
-            while (_columnSegments.Count <= lane)
-            {
-                _columnSegments.Add(new List<ColumnSegment>());
-            }
-
-            var segments = _columnSegments[lane];
-
-            if (segments.Count == 0)
-            {
-                segments.Add(new ColumnSegment { StartRow = row, EndRow = row });
-                Debug.WriteLine($"    [Segment] Lane {lane}: NEW segment [{row}, {row}]");
-            }
-            else
-            {
-                var lastSegment = segments[segments.Count - 1];
-
-                if (lastSegment.EndRow == row - 1)
-                {
-                    lastSegment.EndRow = row;
-                    Debug.WriteLine($"    [Segment] Lane {lane}: EXTEND segment to [{lastSegment.StartRow}, {row}]");
-                }
-                else if (lastSegment.EndRow < row)
-                {
-                    segments.Add(new ColumnSegment { StartRow = row, EndRow = row });
-                    Debug.WriteLine($"    [Segment] Lane {lane}: NEW gap-segment [{row}, {row}] (gap from {lastSegment.EndRow})");
-                }
             }
         }
 
@@ -383,9 +413,6 @@ namespace GitGUI.Services
                     c.Parents?.Contains(commit.Sha) == true);
                 commit.Segments = GenerateSegmentsForCommit(commit);
             }
-
-            // Uncomment to enable branch paths
-            //BuildBranchPaths(commits);
         }
 
         /// <summary>
@@ -403,119 +430,203 @@ namespace GitGUI.Services
             Debug.WriteLine("==========================================\n");
         }
 
-        private void BuildBranchPaths(List<CommitRowViewModel> commits)
+        private List<GraphSegment> GenerateSegmentsForCommit(CommitRowViewModel commit)
         {
-            if (!commits.Any()) return;
+            Debug.WriteLine($"\n=== GenerateSegmentsForCommit: {commit.Sha} (Row {commit.Row}) ===");
 
-            var visited = new HashSet<string>();
-            _branchPaths.Clear();
+            var segments = new List<GraphSegment>();
 
-            var headCommits = commits.Where(commit =>
-                !commits.Any(c => c.Parents?.Contains(commit.Sha) == true)
-            ).ToList();
+            // ---------------------------------------------------------
+            // 1. VERTICAL SEGMENTS (Pipes)
+            // ---------------------------------------------------------
+            Debug.WriteLine("Step 1: Checking vertical segments...");
 
-            Debug.WriteLine($"[BranchPaths] Found {headCommits.Count} HEAD commits");
-
-            foreach (var headCommit in headCommits)
+            for (int laneIndex = 0; laneIndex < _columnSegments.Count; laneIndex++)
             {
-                if (visited.Contains(headCommit.Sha))
+                var laneSegments = _columnSegments[laneIndex];
+                if (laneSegments.Count == 0)
+                {
+                    Debug.WriteLine($"  Lane {laneIndex}: No lane segments.");
                     continue;
-
-                var path = TraceBranchPath(headCommit, commits, visited);
-                if (path.Points.Count > 0)
-                {
-                    _branchPaths.Add(path);
-                    Debug.WriteLine($"[BranchPaths] Path color={path.ColorIndex}, points={path.Points.Count}");
                 }
-            }
-        }
 
-        private BranchPath TraceBranchPath(
-            CommitRowViewModel headCommit,
-            List<CommitRowViewModel> allCommits,
-            HashSet<string> visited)
-        {
-            if (!_colors.TryGetValue(headCommit.Sha, out int colorIndex))
-            {
-                colorIndex = 0;
-            }
+                var intersectingSegment = laneSegments.FirstOrDefault(seg =>
+                    seg.StartRow <= commit.Row && seg.EndRow >= commit.Row);
 
-            var path = new BranchPath { ColorIndex = colorIndex };
-
-            var current = headCommit;
-            int pathLength = 0;
-            const int maxPathLength = 10000;
-
-            while (current != null && !visited.Contains(current.Sha) && pathLength < maxPathLength)
-            {
-                if (current == null || string.IsNullOrEmpty(current.Sha))
-                    break;
-
-                visited.Add(current.Sha);
-
-                int lane = 0;
-                if (!_lanes.TryGetValue(current.Sha, out lane))
+                if (intersectingSegment != null)
                 {
-                    lane = 0;
-                }
-                path.Points.Add((current.Row, lane));
-                pathLength++;
+                    Debug.WriteLine(
+                        $"  Lane {laneIndex}: Found intersecting segment (Color {intersectingSegment.ColorIndex}) " +
+                        $"[{intersectingSegment.StartRow} → {intersectingSegment.EndRow}]");
 
-                if (current.Parents?.Count > 0)
-                {
-                    var firstParentSha = current.Parents[0];
-
-                    if (string.IsNullOrEmpty(firstParentSha))
-                        break;
-
-                    current = allCommits.FirstOrDefault(c => c?.Sha == firstParentSha);
-
-                    if (current == null)
-                        break;
+                    segments.Add(new GraphSegment
+                    {
+                        Kind = SegmentKind.Vertical,
+                        FromLane = laneIndex,
+                        ToLane = laneIndex,
+                        ColorIndex = intersectingSegment.ColorIndex,
+                        IsStart = (_childrenMap[commit.Sha].Count <= 0),
+                        IsEnd = (commit.Parents.Count <= 0)
+                    });
                 }
                 else
                 {
-                    break;
+                    Debug.WriteLine($"  Lane {laneIndex}: No intersecting segment at row {commit.Row}.");
                 }
             }
 
-            return path;
-        }
+            // ---------------------------------------------------------
+            // 2. CURVED SEGMENTS (Connections)
+            // ---------------------------------------------------------
+            Debug.WriteLine("Step 2: Checking curved segments (merges / forks)...");
 
-        public List<BranchPath> GetBranchPaths() => _branchPaths;
-
-        private List<GraphSegment> GenerateSegmentsForCommit(CommitRowViewModel commit)
-        {
-            var segments = new List<GraphSegment>();
-
-            if (commit == null || commit.Parents == null || commit.Parents.Count == 0)
-                return segments;
-
-            if (!_lanes.TryGetValue(commit.Sha, out var commitLane))
-                return segments;
-
-            for (int i = 0; i < commit.Parents.Count; i++)
+            // A. MERGES
+            if (commit.Parents != null && commit.Parents.Count > 1)
             {
-                var parentSha = commit.Parents[i];
+                Debug.WriteLine($"  Merge detected: {commit.Parents.Count} parents.");
 
-                if (string.IsNullOrEmpty(parentSha))
-                    continue;
-
-                if (!_lanes.TryGetValue(parentSha, out var parentLane))
-                    continue;
-
-                var kind = i == 0 ? SegmentKind.Branch : SegmentKind.Merge;
-
-                segments.Add(new GraphSegment
+                if (_lanes.TryGetValue(commit.Sha, out int commitLane))
                 {
-                    Kind = kind,
-                    FromLane = commitLane,
-                    ToLane = parentLane,
-                    ColorIndex = _colors.GetValueOrDefault(commit.Sha, 0)
-                });
+                    for (int i = 1; i < commit.Parents.Count; i++)
+                    {
+                        var parentSha = commit.Parents[i];
+
+                        if (_lanes.TryGetValue(parentSha, out int parentLane))
+                        {
+                            Debug.WriteLine($"    Parent {parentSha}: commitLane={commitLane}, parentLane={parentLane}");
+
+                            if (commitLane != parentLane)
+                            {
+                                int color = _colors.GetValueOrDefault(parentSha, 0);
+
+                                Debug.WriteLine($"    -> Adding MERGE curve to lane {parentLane} (Color {color})");
+
+                                segments.Add(new GraphSegment
+                                {
+                                    Kind = SegmentKind.Merge,
+                                    FromLane = commitLane,
+                                    ToLane = parentLane,
+                                    ColorIndex = color
+                                });
+                            }
+                            else
+                            {
+                                Debug.WriteLine("    Same lane → No merge curve needed.");
+                            }
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"    Parent {parentSha}: No lane assigned!");
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine("  ERROR: Commit does not have a lane assigned!");
+                }
             }
 
+            // B. FORKS
+            if (_childrenMap.TryGetValue(commit.Sha, out var children))
+            {
+                int myLane = _lanes[commit.Sha];
+                Debug.WriteLine($"  Fork check: {children.Count} children found.");
+
+                foreach (var child in children)
+                {
+                    if (_lanes.TryGetValue(child.Sha, out int childLane))
+                    {
+                        Debug.WriteLine($"    Child {child.Sha}: myLane={myLane}, childLane={childLane}");
+
+                        if (childLane != myLane)
+                        {
+                            bool isFirstParent =
+                                child.Parents != null &&
+                                child.Parents.Count > 0 &&
+                                child.Parents[0] == commit.Sha;
+
+                            Debug.WriteLine($"      Is first parent: {isFirstParent}");
+
+                            if (isFirstParent)
+                            {
+                                int color = _colors.GetValueOrDefault(child.Sha, 0);
+
+                                Debug.WriteLine($"      -> Adding BRANCH curve from child lane {childLane} (Color {color})");
+
+                                segments.Add(new GraphSegment
+                                {
+                                    Kind = SegmentKind.Branch,
+                                    FromLane = childLane,
+                                    ToLane = myLane,
+                                    ColorIndex = color
+                                });
+                            }
+                            else
+                            {
+                                Debug.WriteLine("      Not first parent → Skip branch curve.");
+                            }
+                        }
+                        else
+                        {
+                            Debug.WriteLine("      Same lane → No branch curve.");
+                        }
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"    Child {child.Sha}: No lane assigned!");
+                    }
+                }
+            }
+            else
+            {
+                Debug.WriteLine("  No children found.");
+            }
+
+            Debug.WriteLine($"=== Total Segments Generated: {segments.Count} ===\n");
+
             return segments;
+        }
+
+
+        public void PrintDebugInfo(List<CommitRowViewModel> commits)
+        {
+            Debug.WriteLine("\n========== COLUMN SEGMENTS DUMP ==========");
+            for (int i = 0; i < _columnSegments.Count; i++)
+            {
+                Debug.Write($"Lane {i}: ");
+                if (_columnSegments[i].Count == 0)
+                {
+                    Debug.WriteLine("(empty)");
+                    continue;
+                }
+
+                foreach (var seg in _columnSegments[i])
+                {
+                    string end = seg.EndRow == int.MaxValue ? "Inf" : seg.EndRow.ToString();
+                    Debug.Write($"[{seg.StartRow}->{end}] ");
+                }
+                Debug.WriteLine("");
+            }
+
+            Debug.WriteLine("\n========== COMMIT SEGMENTS GENERATION CHECK ==========");
+            // Sample check for the first few commits
+            foreach (var commit in commits.Take(5))
+            {
+                Debug.WriteLine($"Commit {commit.Sha.Substring(0, 7)} (Row {commit.Row})");
+
+                // Manual check of what logic sees
+                for (int l = 0; l < _columnSegments.Count; l++)
+                {
+                    var segs = _columnSegments[l];
+                    var match = segs.FirstOrDefault(s => s.StartRow <= commit.Row && s.EndRow >= commit.Row);
+                    if (match != null)
+                    {
+                        string end = match.EndRow == int.MaxValue ? "Inf" : match.EndRow.ToString();
+                        Debug.WriteLine($"  -> Covered by Lane {l}: Segment [{match.StartRow}->{end}]");
+                    }
+                }
+            }
+            Debug.WriteLine("==================================================\n");
         }
     }
 
@@ -523,9 +634,6 @@ namespace GitGUI.Services
     {
         public int StartRow { get; set; }
         public int EndRow { get; set; }
-        public string EndCommitSha { get; set; }
-        public int BranchOrder { get; set; }
-
-        public override string ToString() => $"Segment({StartRow}-{EndRow})";
+        public int ColorIndex { get; set; }
     }
 }
