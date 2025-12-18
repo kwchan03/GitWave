@@ -1,10 +1,10 @@
 ﻿// ViewModels/DiffViewerTreeViewModel.cs
-using GitGUI.Models;
-using GitGUI.Services;
+using GitWave.Models;
+using GitWave.Services;
 using OpenTap;
 using System.Collections.ObjectModel;
 
-namespace GitGUI.ViewModels
+namespace GitWave.ViewModels
 {
     public class DiffViewerTreeViewModel
     {

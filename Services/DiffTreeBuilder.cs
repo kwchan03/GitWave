@@ -1,13 +1,13 @@
 ﻿// Services/DiffTreeBuilder.cs
-using GitGUI.Models;
+using GitWave.Models;
 using OpenTap;
 using System.Collections.ObjectModel;
 using System.Windows.Media;
-using static GitGUI.Services.TestPlanDiffService;
+using static GitWave.Services.TestPlanDiffService;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     public static class DiffTreeBuilder
     {

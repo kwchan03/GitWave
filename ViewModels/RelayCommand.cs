@@ -1,6 +1,6 @@
 ﻿using System.Windows.Input;
 
-namespace GitGUI.ViewModels
+namespace GitWave.ViewModels
 {
     public class RelayCommand : ICommand
     {

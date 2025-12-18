@@ -1,4 +1,4 @@
-﻿namespace GitGUI.Models
+﻿namespace GitWave.Models
 {
     /// <summary>
     /// Describes the type of line segment in the commit graph.

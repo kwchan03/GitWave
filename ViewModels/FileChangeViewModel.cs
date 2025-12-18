@@ -1,7 +1,7 @@
 ﻿using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 
-namespace GitGUI.ViewModels
+namespace GitWave.ViewModels
 {
     public class FileChangeViewModel
     {

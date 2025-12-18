@@ -1,8 +1,8 @@
-﻿//// GitGUI.Services/CommitGraphBuilder.cs
-//using GitGUI.Models;
+﻿//// GitWave.Services/CommitGraphBuilder.cs
+//using GitWave.Models;
 //using LibGit2Sharp;
 
-//namespace GitGUI.Services
+//namespace GitWave.Services
 //{
 //    public static class CommitGraphBuilder
 //    {

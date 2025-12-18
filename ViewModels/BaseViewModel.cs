@@ -1,10 +1,29 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace GitGUI.ViewModels
+namespace GitWave.ViewModels
 {
     public class BaseViewModel : INotifyPropertyChanged
     {
+        private bool _isBusy;
+
+        /// <summary>
+        /// Indicates if the view model is currently performing a long-running operation.
+        /// Useful for showing loading spinners in the UI.
+        /// </summary>
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set
+            {
+                if (_isBusy != value)
+                {
+                    _isBusy = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         // Event to notify the UI when a property changes
         public event PropertyChangedEventHandler? PropertyChanged;
 

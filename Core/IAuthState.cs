@@ -1,6 +1,6 @@
-﻿using GitGUI.Models;
+﻿using GitWave.Models;
 
-namespace GitGUI.Core
+namespace GitWave.Core
 {
     public interface IAuthState
     {

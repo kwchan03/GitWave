@@ -50,7 +50,7 @@ public static class GitHelper
         return DeserializeTestPlan(text);
     }
 
-    private static TestPlan DeserializeTestPlan(string text)
+    public static TestPlan DeserializeTestPlan(string text)
     {
         var serializer = new TapSerializer();
         return serializer.DeserializeFromString(

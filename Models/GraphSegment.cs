@@ -1,4 +1,4 @@
-﻿namespace GitGUI.Models
+﻿namespace GitWave.Models
 {
     /// <summary>
     /// Represents a visual connection between commits in the graph.

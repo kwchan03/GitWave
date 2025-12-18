@@ -1,8 +1,8 @@
-﻿using GitGUI.Models;
+﻿using GitWave.Models;
 using OpenTap;
 using System.ComponentModel;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     public sealed class PropertyChange
     {

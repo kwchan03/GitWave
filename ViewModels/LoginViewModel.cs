@@ -1,11 +1,11 @@
-﻿using GitGUI.Models;
-using GitGUI.Pages;
-using GitGUI.Services;
+﻿using GitWave.Models;
+using GitWave.Services;
+using GitWave.UI.Pages;
 using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 using System.Windows.Input;
 
-namespace GitGUI.ViewModels
+namespace GitWave.ViewModels
 {
     public class LoginViewModel : BaseViewModel
     {

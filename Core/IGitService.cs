@@ -1,10 +1,11 @@
-﻿using GitGUI.Models;
+﻿using GitWave.Models;
 using LibGit2Sharp;
 
-namespace GitGUI.Core
+namespace GitWave.Core
 {
     public interface IGitService
     {
+        GitHubUser AuthenticatedUser { get; set; }
         void CreateRepository(string path);
         IEnumerable<CommitInfo> GetCommitLog(int maxCount = 50);
         IEnumerable<Commit> FetchCommitsForGraph();
@@ -25,5 +26,6 @@ namespace GitGUI.Core
         void CloneRepository(string sourceUrl, string parentDirectory, GitHubUser AuthenticatedUser);
         void PullCurrentBranch(string path, GitHubUser AuthenticatedUser);
         void PushCurrentBranch(string path, GitHubUser AuthenticatedUser);
+        (string Owner, string Name) GetRemoteRepoInfo();
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace GitGUI.Services
+﻿namespace GitWave.Services
 {
     public sealed class GitCredentials
     {

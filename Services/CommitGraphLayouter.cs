@@ -1,8 +1,8 @@
-﻿using GitGUI.Models;
-using GitGUI.ViewModels;
+﻿using GitWave.Models;
+using GitWave.ViewModels;
 using System.Diagnostics;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     /// <summary>
     /// Implements DoltHub-style commit graph layout algorithm.

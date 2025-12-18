@@ -1,12 +1,12 @@
-﻿using Keysight.Ccl.Wsl.UI;
+﻿using System.Windows;
 using System.Windows.Controls;
 
-namespace GitGUI
+namespace GitWave
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : WslMainWindow
+    public partial class MainWindow : Window
     {
         public MainWindow()
         {

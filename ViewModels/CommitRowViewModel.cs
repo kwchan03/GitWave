@@ -1,7 +1,6 @@
-﻿using GitGUI.Controls;
-using GitGUI.Core;
-using GitGUI.Models;
-using GitGUI.Services;
+﻿using GitWave.Controls;
+using GitWave.Core;
+using GitWave.Models;
 using LibGit2Sharp;
 using OpenTap;
 using System.Collections.ObjectModel;
@@ -9,7 +8,7 @@ using System.Windows;
 using System.Windows.Input;
 using MessageBox = System.Windows.MessageBox;
 
-namespace GitGUI.ViewModels
+namespace GitWave.ViewModels
 {
     public class CommitRowViewModel : BaseViewModel
     {
@@ -202,17 +201,8 @@ namespace GitGUI.ViewModels
                     return;
                 }
 
-                var diffs = TestPlanDiffService.ComparePlans(before, after);
-
-                foreach (var d in diffs.Where(d => d.Kind == StepChangeKind.Modified))
-                {
-                    var names = string.Join(", ", d.PropertyChanges.Select(pc => pc.Name));
-                    System.Diagnostics.Debug.WriteLine($"Modified step {d.DisplayName}: {names}");
-                }
-
                 var vm = new DiffViewerTreeViewModel();
                 vm.Load(before, after);
-                System.Diagnostics.Debug.WriteLine($"Before count: {vm.BeforeRoots.Count}, After count: {vm.AfterRoots.Count}");
 
                 using (var win = new DiffViewerWindow(vm) { Owner = System.Windows.Application.Current.MainWindow })
                 {

@@ -1,14 +1,16 @@
-﻿using GitGUI.Controls;
-using GitGUI.Core;
-using GitGUI.Models;
-using GitGUI.Services;
+﻿using GitWave.Controls;
+using GitWave.Core;
+using GitWave.Models;
+using GitWave.Services;
+using GitWave.UI.Pages;
 using LibGit2Sharp;
+using Microsoft.Extensions.DependencyInjection;
 using OpenTap;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
 
-namespace GitGUI.ViewModels
+namespace GitWave.ViewModels
 {
     public class OperationViewModel : BaseViewModel
     {
@@ -77,6 +79,8 @@ namespace GitGUI.ViewModels
         // ---------------------------
         // Commands
         // ---------------------------
+        public ICommand ShowPullRequestsPageCommand { get; }
+        public ICommand ShowRepositoryPageCommand { get; }
         public ICommand BrowseFolderCommand { get; }
         public ICommand OpenRepoCommand { get; }
         public ICommand CreateRepoCommand { get; }
@@ -102,6 +106,18 @@ namespace GitGUI.ViewModels
             _git = git ?? throw new ArgumentNullException(nameof(git));
             Graph = new CommitGraphViewModel(_git);
 
+            ShowPullRequestsPageCommand = new RelayCommand(_ => ExecuteAction(() =>
+            {
+                var main = App.Services.GetRequiredService<MainWindow>();
+                var prPage = App.Services.GetRequiredService<PullRequestPage>();
+                main.NavigateTo(prPage);
+            }));
+            ShowRepositoryPageCommand = new RelayCommand(_ => ExecuteAction(() =>
+            {
+                var main = App.Services.GetRequiredService<MainWindow>();
+                var repoPage = App.Services.GetRequiredService<OperationPage>();
+                main.NavigateTo(repoPage);
+            }));
             // ---------------------------
             // Repo operations
             // ---------------------------

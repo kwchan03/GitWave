@@ -1,7 +1,7 @@
-﻿//using GitGUI.Models;
-//using GitGUI.ViewModels;
+﻿//using GitWave.Models;
+//using GitWave.ViewModels;
 
-//namespace GitGUI.Services
+//namespace GitWave.Services
 //{
 //    /// <summary>
 //    /// Simplified Git commit graph layout algorithm.

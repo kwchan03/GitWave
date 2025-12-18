@@ -1,0 +1,67 @@
+﻿<!-- Controls/DiffViewer.xaml -->
+<UserControl x:Class="GitWave.Controls.DiffViewer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:GitWave.Models">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="4"/>
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- BEFORE -->
+        <GroupBox Header="Before" Margin="4">
+            <TreeView ItemsSource="{Binding BeforeRoots}">
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="TreeViewItem">
+                        <Setter Property="Focusable" Value="False" />
+                    </Style>
+                </TreeView.ItemContainerStyle>
+                <TreeView.Resources>
+                    <!-- Step nodes (can contain children of both types) -->
+                    <HierarchicalDataTemplate DataType="{x:Type models:StepNode}"
+                                              ItemsSource="{Binding Children}">
+                        <Border Background="{Binding Background}" Padding="4" Margin="0,2,0,2" CornerRadius="2">
+                            <TextBlock Text="{Binding Display}" FontWeight="SemiBold"/>
+                        </Border>
+                    </HierarchicalDataTemplate>
+
+                    <!-- Property rows (leaves) -->
+                    <DataTemplate DataType="{x:Type models:PropertyNode}">
+                        <Border Background="{Binding Background}" Padding="4" Margin="0,2,0,2" CornerRadius="2">
+                            <TextBlock Text="{Binding Display}" />
+                        </Border>
+                    </DataTemplate>
+                </TreeView.Resources>
+            </TreeView>
+        </GroupBox>
+        <Grid Grid.Column="1" Background="#DDD"/>
+
+        <!-- AFTER -->
+        <GroupBox Grid.Column="2" Header="After" Margin="4">
+            <TreeView ItemsSource="{Binding AfterRoots}">
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="TreeViewItem">
+                        <Setter Property="Focusable" Value="False" />
+                    </Style>
+                </TreeView.ItemContainerStyle>
+                <TreeView.Resources>
+                    <HierarchicalDataTemplate DataType="{x:Type models:StepNode}"
+                                              ItemsSource="{Binding Children}">
+                        <Border Background="{Binding Background}" Padding="4" Margin="0,2,0,2" CornerRadius="2">
+                            <TextBlock Text="{Binding Display}" FontWeight="SemiBold"/>
+                        </Border>
+                    </HierarchicalDataTemplate>
+
+                    <DataTemplate DataType="{x:Type models:PropertyNode}">
+                        <Border Background="{Binding Background}" Padding="4" Margin="0,2,0,2" CornerRadius="2">
+                            <TextBlock Text="{Binding Display}" />
+                        </Border>
+                    </DataTemplate>
+                </TreeView.Resources>
+            </TreeView>
+        </GroupBox>
+    </Grid>
+</UserControl>

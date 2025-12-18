@@ -1,9 +1,9 @@
-﻿using GitGUI.Models;
+﻿using GitWave.Models;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     public static class OAuthFetchService
     {
@@ -12,7 +12,7 @@ namespace GitGUI.Services
         public static async Task<GitHubUser> GetGitHubUserAsync(string accessToken)
         {
             httpClient.DefaultRequestHeaders.Clear();
-            httpClient.DefaultRequestHeaders.Add("User-Agent", "WPF-GitGUI-App");
+            httpClient.DefaultRequestHeaders.Add("User-Agent", "WPF-GitWave-App");
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", accessToken);
 
             var response = await httpClient.GetAsync("https://api.github.com/user");

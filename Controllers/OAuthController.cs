@@ -1,7 +1,7 @@
-﻿using GitGUI.Services;
+﻿using GitWave.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace GitGUI.Controllers
+namespace GitWave.Controllers
 {
     [Route("/callback")]
     [ApiController]

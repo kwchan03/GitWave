@@ -1,0 +1,177 @@
+﻿<UserControl x:Class="GitWave.UI.Controls.ConversationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:GitWave.UI.Controls"
+             xmlns:vm="clr-namespace:GitWave.ViewModels"
+             xmlns:md="clr-namespace:Markdig.Wpf;assembly=Markdig.Wpf"
+             mc:Ignorable="d" 
+             d:DesignHeight="600" d:DesignWidth="800">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        
+        <Style x:Key="AvatarStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Fill" Value="#E1E4E8"/>
+        </Style>
+
+        <DataTemplate DataType="{x:Type vm:CommitViewModel}">
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="42"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="⚯" FontSize="20" HorizontalAlignment="Center" Foreground="#586069" Margin="0,5,0,0"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock>
+                        <Run Text="{Binding Actor.Login}" FontWeight="Bold"/>
+                        <Run Text="added a commit" Foreground="#586069"/>
+                    </TextBlock>
+                    <TextBlock Text="{Binding MessageHeadline}" Foreground="#444" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ShortSha}" FontFamily="Consolas" Foreground="#0366d6" HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding CreatedAtDisplay}" FontSize="11" Foreground="Gray" HorizontalAlignment="Right"/>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:GeneralCommentViewModel}">
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="42"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Ellipse Style="{StaticResource AvatarStyle}">
+                    <Ellipse.Fill>
+                        <ImageBrush ImageSource="{Binding Actor.AvatarUrl}"/>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <Border Grid.Column="1" BorderBrush="#D1D5DA" BorderThickness="1" CornerRadius="6" Background="White">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Background="#F6F8FA" Padding="12,8" BorderBrush="#D1D5DA" BorderThickness="0,0,0,1" CornerRadius="6,6,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Actor.Login}" FontWeight="Bold"/>
+                                <TextBlock Text=" commented " Foreground="#586069"/>
+                                <TextBlock Text="{Binding CreatedAtDisplay}" Foreground="#586069"/>
+                            </StackPanel>
+                        </Border>
+                        <md:MarkdownViewer Grid.Row="1"
+                                           Markdown="{Binding Body}" 
+                                           Background="Transparent" 
+                                           ScrollViewer.CanContentScroll="False"
+                                           IsEnabled="False"
+                                           BorderThickness="0"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:ReviewViewModel}">
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="42"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Ellipse Style="{StaticResource AvatarStyle}">
+                    <Ellipse.Fill>
+                        <ImageBrush ImageSource="{Binding Actor.AvatarUrl}"/>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <StackPanel Grid.Column="1">
+                    <Border Background="White" BorderBrush="#E1E4E8" BorderThickness="1" CornerRadius="6">
+                        <StackPanel>
+                            <Border Background="#F6F8FA" Padding="12,8" BorderBrush="#D1D5DA" BorderThickness="0,0,0,1" CornerRadius="6,6,0,0">
+                                <TextBlock FontWeight="Bold" FontSize="14">
+                                    <Run Text="{Binding Actor.Login}"/>
+                                    <Run Text="{Binding AuthorAssociationDisplay, StringFormat=' ({0})', Mode=OneWay}" FontWeight="Normal"/>
+                                    <Run Text="{Binding StateDisplay, Mode=OneWay}" Foreground="#586069" FontWeight="Normal"/>
+                                </TextBlock>
+                            </Border>
+
+                            <md:MarkdownViewer Markdown="{Binding Body}" 
+                                               Background="Transparent" 
+                                               ScrollViewer.CanContentScroll="False"
+                                               IsEnabled="False"
+                                               BorderThickness="0"
+                                               Visibility="{Binding HasBody, Converter={StaticResource BoolToVis}}"/>
+
+                            <ItemsControl ItemsSource="{Binding Threads}" Margin="12,0,12,12"
+                                          Visibility="{Binding HasThreads, Converter={StaticResource BoolToVis}}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:ReviewThreadViewModel}">
+            <Border Margin="0,0,0,12" BorderBrush="#E1E4E8" BorderThickness="1" CornerRadius="6" Background="White">
+                <StackPanel>
+                    <Border Background="#F6F8FA" Padding="8,6" BorderBrush="#E1E4E8" BorderThickness="0,0,0,1">
+                        <TextBlock FontFamily="Consolas" FontSize="12">
+                            <Run Text="{Binding FilePath}" FontWeight="Bold"/>
+                            <Run Text=":"/>
+                            <Run Text="{Binding OriginalPosition}"/>
+                        </TextBlock>
+                    </Border>
+                    <Border Background="#F1F8FF" Padding="8">
+                        <TextBlock Text="{Binding DiffHunk}" FontFamily="Consolas" FontSize="11" Foreground="#586069"/>
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding Comments}"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:ReviewCommentViewModel}">
+            <Border BorderBrush="#E1E4E8" BorderThickness="0,1,0,0" Padding="12,12,12,0">
+                <DockPanel>
+                    <TextBlock Text="{Binding Actor.Login}" FontWeight="Bold" DockPanel.Dock="Top"/>
+                    <md:MarkdownViewer Markdown="{Binding Body}" 
+                                       Background="Transparent" 
+                                       ScrollViewer.CanContentScroll="False"
+                                       IsEnabled="False"
+                                       BorderThickness="0"/>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:SystemEventViewModel}">
+            <Grid Margin="10,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="32"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="26" Height="26" CornerRadius="13" Background="#F6F8FA" BorderBrush="#E1E4E8" BorderThickness="1" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding Icon}" Foreground="{Binding IconColor}" 
+                               HorizontalAlignment="Center" VerticalAlignment="Center" 
+                               FontSize="14" FontWeight="Bold"/>
+                </Border>
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="13">
+                    <Run Text="{Binding Actor.Login}" FontWeight="Bold"/>
+                    <Run Text="{Binding Description}" Foreground="#586069"/>
+                    <Run Text="{Binding CreatedAtDisplay}" Foreground="Gray" FontSize="11"/>
+                </TextBlock>
+            </Grid>
+        </DataTemplate>
+
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,16,0">
+        <ItemsControl ItemsSource="{Binding TimelineItems}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Vertical"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+        </ItemsControl>
+    </ScrollViewer>
+</UserControl>

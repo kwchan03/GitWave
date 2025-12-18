@@ -1,10 +1,10 @@
-﻿using GitGUI.Core;
-using GitGUI.Models;
+﻿using GitWave.Core;
+using GitWave.Models;
 using LibGit2Sharp;
 using System.Diagnostics;
 using System.IO;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     public class GitLibService : IGitService
     {
@@ -12,7 +12,13 @@ namespace GitGUI.Services
         private readonly IGitCredentialProvider _gitCreds;
         private GitHubUser _authenticatedUser;
 
-        public GitLibService(IGitCredentialProvider gitCreds) // NEW
+        public GitHubUser AuthenticatedUser
+        {
+            get => _authenticatedUser;
+            set => _authenticatedUser = value; // Logic to update _repo config if needed
+        }
+
+        public GitLibService(IGitCredentialProvider gitCreds)
         {
             _gitCreds = gitCreds ?? throw new ArgumentNullException(nameof(gitCreds));
         }
@@ -235,12 +241,6 @@ namespace GitGUI.Services
 
             DebugPrintCommits(commits);
 
-            //// Fix order if reversed
-            //if (commits.Count > 1 && commits[0].Parents.Count() > 0)
-            //{
-            //    commits.Reverse();
-            //}
-
             return commits;
         }
 
@@ -398,5 +398,37 @@ namespace GitGUI.Services
             repo.Network.Push(remote, refSpec, options);
         }
         #endregion
+
+        // Add this inside GitLibService class
+        public (string Owner, string Name) GetRemoteRepoInfo()
+        {
+            if (_repo == null) return (null, null);
+
+            // 1. Try to get 'origin', otherwise grab the first remote found
+            var remote = _repo.Network.Remotes["origin"] ?? _repo.Network.Remotes.FirstOrDefault();
+
+            if (remote == null) return (null, null);
+
+            // 2. Clean the URL (remove .git extension and trailing slashes)
+            // Supports: 
+            // - https://github.com/Owner/Repo.git
+            // - git@github.com:Owner/Repo.git
+            var url = remote.Url.TrimEnd('/');
+            if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                url = url.Substring(0, url.Length - 4);
+            }
+
+            // 3. Parse the URL to find the last two segments
+            var parts = url.Split(new[] { '/', ':' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length >= 2)
+            {
+                // Return (Owner, RepoName)
+                return (parts[parts.Length - 2], parts[parts.Length - 1]);
+            }
+
+            return (null, null);
+        }
     }
 }

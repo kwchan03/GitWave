@@ -1,12 +1,12 @@
-﻿//// GitGUI.ViewModels/CommitGraphVM.cs
-//using GitGUI.Core;
-//using GitGUI.Models;
+﻿//// GitWave.ViewModels/CommitGraphVM.cs
+//using GitWave.Core;
+//using GitWave.Models;
 //using System.Collections.ObjectModel;
 //using System.ComponentModel;
 //using System.Runtime.CompilerServices;
 //using System.Windows.Input;
 
-//namespace GitGUI.ViewModels
+//namespace GitWave.ViewModels
 //{
 //    public sealed class CommitGraphVM : INotifyPropertyChanged, IDisposable
 //    {

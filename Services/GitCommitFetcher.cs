@@ -1,7 +1,7 @@
-﻿using GitGUI.Models;
+﻿using GitWave.Models;
 using LibGit2Sharp;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     public static class GitCommitFetcher
     {

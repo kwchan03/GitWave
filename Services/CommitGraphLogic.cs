@@ -1,10 +1,10 @@
-﻿//using GitGUI.Models;
-//using GitGUI.Services;
+﻿//using GitWave.Models;
+//using GitWave.Services;
 //using GraphX.Common.Enums;
 //using GraphX.Controls;
 //using GraphX.Logic.Models;
 
-//namespace GitGUI.Logic
+//namespace GitWave.Logic
 //{
 //    public class CommitGraphLogic
 //    {

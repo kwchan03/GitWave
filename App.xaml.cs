@@ -1,12 +1,11 @@
-﻿using GitGUI.Core;
-using GitGUI.Pages;
-using GitGUI.Services;
-using GitGUI.ViewModels;
-using Keysight.Ccl.Wsl.UI;
+﻿using GitWave.Core;
+using GitWave.Services;
+using GitWave.UI.Pages;
+using GitWave.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
 
-namespace GitGUI
+namespace GitWave
 {
     public partial class App : System.Windows.Application
     {
@@ -17,10 +16,6 @@ namespace GitGUI
             // 0) Initialize WSL UX (themes/skins/fonts) before any window is shown
             //TestPlanGrid testPlanGrid = new TestPlanGrid();
             //testPlanGrid.InitializeComponent();
-            UXManager.Initialize("System");
-            UXManager.ColorScheme = "CaranuLight";
-            Keysight.Ccl.Wsl.UI.Managers.SkinManager.Instance.SkinFragment("CaranuDark", false);
-
             var services = new ServiceCollection();
 
             // 1) Register the GCM credential provider
@@ -43,6 +38,7 @@ namespace GitGUI
             services.AddTransient<LoginPage>();
             services.AddTransient<PullRequestPage>();
             services.AddTransient<OperationPage>();
+            services.AddTransient<PullRequestPage>();
 
             // Register MainWindow
             services.AddSingleton<MainWindow>();
@@ -57,11 +53,10 @@ namespace GitGUI
             mainWindow.Show();
 
             // Navigate to LoginPage first
-            //var loginPage = Services.GetRequiredService<LoginPage>();
             var loginPage = Services.GetRequiredService<LoginPage>();
             mainWindow.NavigateTo(loginPage);
 
-            //var window = new GitGUI.Pages.TestPlanView();
+            //var window = new GitWave.Pages.TestPlanView();
             //MainWindow = window;
             //window.Show();
 

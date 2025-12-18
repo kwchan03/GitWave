@@ -1,9 +1,9 @@
-﻿// GitGUI.Models/CommitRowFactory.cs
-using GitGUI.Core;
-using GitGUI.ViewModels;
+﻿// GitWave.Models/CommitRowFactory.cs
+using GitWave.Core;
+using GitWave.ViewModels;
 using LibGit2Sharp;
 
-namespace GitGUI.Models
+namespace GitWave.Models
 {
     public static class CommitRowFactory
     {

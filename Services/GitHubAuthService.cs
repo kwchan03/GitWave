@@ -1,9 +1,9 @@
-﻿using GitGUI.Models;
+﻿using GitWave.Models;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     public sealed class GitHubAuthService
     {
@@ -22,7 +22,7 @@ namespace GitGUI.Services
 
             // Verify token by calling the user API
             _http.DefaultRequestHeaders.Clear();
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("WPF-GitGUI-App");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("WPF-GitWave-App");
             _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", creds.Secret);
 
@@ -35,7 +35,7 @@ namespace GitGUI.Services
         public async Task<GitHubUser> GetCurrentUserAsync(string token)
         {
             _http.DefaultRequestHeaders.Clear();
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("WPF-GitGUI-App");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("WPF-GitWave-App");
             _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 

@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Net.Http;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     internal static class Globals
     {

@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Xml.Serialization;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     /// <summary>
     /// TUI-like inspector: loads a .TapPlan and dumps step properties using OpenTAP Annotations.

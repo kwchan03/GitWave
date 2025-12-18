@@ -1,4 +1,4 @@
-﻿namespace GitGUI.Models
+﻿namespace GitWave.Models
 {
     public class CommitInfo
     {

@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace GitGUI.Services
+namespace GitWave.Services
 {
     /// Resolves GitHub credentials via Git Credential Manager (device flow + secure cache).
     /// Requires GCM installed and configured (e.g., `git-credential-manager configure`).

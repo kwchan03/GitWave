@@ -1,7 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using Brush = System.Windows.Media.Brush;
 
-namespace GitGUI.Models
+namespace GitWave.Models
 {
     public abstract class DiffTreeNode
     {
