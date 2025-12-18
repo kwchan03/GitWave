@@ -2,7 +2,7 @@
 using OpenTap;
 using System.IO;
 
-public static class GitHelper
+public static class TestPlanHelper
 {
     public static TestPlan GetTestPlanFromHEAD(Repository repo, string repoRelativeFile)
     {

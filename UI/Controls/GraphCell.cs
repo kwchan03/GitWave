@@ -47,6 +47,19 @@ namespace GitWave.UI.Controls
             get => (double)GetValue(LaneWidthProperty);
             set => SetValue(LaneWidthProperty, value);
         }
+
+        public static readonly DependencyProperty MinGraphWidthProperty =
+            DependencyProperty.Register(
+                nameof(MinGraphWidth),
+                typeof(double),
+                typeof(GraphCell),
+                new FrameworkPropertyMetadata(40.0, FrameworkPropertyMetadataOptions.AffectsMeasure));
+
+        public double MinGraphWidth
+        {
+            get => (double)GetValue(MinGraphWidthProperty);
+            set => SetValue(MinGraphWidthProperty, value);
+        }
         #endregion
 
         #region Rendering Constants
@@ -106,6 +119,28 @@ namespace GitWave.UI.Controls
             SnapsToDevicePixels = true;
             UseLayoutRounding = true;
         }
+
+        //#region Measure & Arrange
+
+        //protected override Size MeasureOverride(Size availableSize)
+        //{
+        //    // Ensure minimum width is enforced
+        //    double width = Math.Max(MinGraphWidth, availableSize.Width);
+        //    double height = availableSize.Height.IsNaN() || availableSize.Height == double.PositiveInfinity
+        //        ? 20.0  // Default row height
+        //        : availableSize.Height;
+
+        //    return new Size(width, height);
+        //}
+
+        //protected override Size ArrangeOverride(Size finalSize)
+        //{
+        //    // Enforce minimum width
+        //    double width = Math.Max(MinGraphWidth, finalSize.Width);
+        //    return new Size(width, finalSize.Height);
+        //}
+
+        //#endregion
 
         #region Rendering
 

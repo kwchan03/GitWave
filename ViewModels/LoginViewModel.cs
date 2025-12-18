@@ -40,8 +40,8 @@ namespace GitWave.ViewModels
                 App.Current.Dispatcher.Invoke(() =>
                 {
                     var main = App.Services.GetRequiredService<MainWindow>();
-                    var operationPage = App.Services.GetRequiredService<OperationPage>();
-                    main.NavigateTo(operationPage);
+                    var repositoryPage = App.Services.GetRequiredService<RepositoryPage>();
+                    main.NavigateTo(repositoryPage);
                 });
             }
             catch (Exception ex)

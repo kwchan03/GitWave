@@ -11,9 +11,9 @@
         <!-- Top summary -->
         <Grid SnapsToDevicePixels="True" Margin="0,1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
                 <!-- Graph area -->
-                <ColumnDefinition Width="540"/>
+                <ColumnDefinition Width="*"/>
                 <!-- Text area -->
             </Grid.ColumnDefinitions>
 
@@ -23,10 +23,11 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <local:GraphCell Grid.RowSpan="2" Grid.Column="0" Row="{Binding}" 
-                                VerticalAlignment="Stretch"
-                                HorizontalAlignment="Stretch"
-                                IsHitTestVisible="False"/>
+            <local:GraphCell Grid.RowSpan="2" Grid.Column="0" Row="{Binding}"
+                             MinWidth="{Binding DataContext.MinGraphWidth, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWay}"
+                             VerticalAlignment="Stretch"
+                             HorizontalAlignment="Left"
+                             IsHitTestVisible="False"/>
 
             <!-- Right: Main Commit Row -->
             <Grid Grid.Column="1" Grid.Row="0" Margin="6,0"  MouseLeftButtonUp="OnClick">

@@ -178,7 +178,7 @@ namespace GitWave.ViewModels
 
                 if (IsRootCommit)
                 {
-                    after = GitHelper.LoadTestPlanFromCommit(_repo, commit, file.FilePath);
+                    after = TestPlanHelper.LoadTestPlanFromCommit(_repo, commit, file.FilePath);
                 }
                 else
                 {
@@ -190,8 +190,8 @@ namespace GitWave.ViewModels
                         return;
                     }
 
-                    before = GitHelper.LoadTestPlanFromCommit(_repo, parent, file.FilePath);
-                    after = GitHelper.LoadTestPlanFromCommit(_repo, commit, file.FilePath);
+                    before = TestPlanHelper.LoadTestPlanFromCommit(_repo, parent, file.FilePath);
+                    after = TestPlanHelper.LoadTestPlanFromCommit(_repo, commit, file.FilePath);
                 }
 
                 if (before == null && after == null)
@@ -201,7 +201,7 @@ namespace GitWave.ViewModels
                     return;
                 }
 
-                var vm = new DiffViewerTreeViewModel();
+                var vm = new DiffViewerViewModel();
                 vm.Load(before, after);
 
                 using (var win = new DiffViewerWindow(vm) { Owner = System.Windows.Application.Current.MainWindow })

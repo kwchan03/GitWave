@@ -6,7 +6,7 @@ using System.Collections.ObjectModel;
 
 namespace GitWave.ViewModels
 {
-    public class DiffViewerTreeViewModel
+    public class DiffViewerViewModel
     {
         public ObservableCollection<StepNode> BeforeRoots { get; } = new();
         public ObservableCollection<StepNode> AfterRoots { get; } = new();

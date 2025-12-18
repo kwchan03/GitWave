@@ -33,9 +33,11 @@ namespace GitWave
             // Register ViewModels
             services.AddTransient<LoginViewModel>();
             services.AddSingleton<OperationViewModel>();
+            services.AddSingleton<RepositoryViewModel>();
 
             // Register Pages
             services.AddTransient<LoginPage>();
+            services.AddTransient<RepositoryPage>();
             services.AddTransient<PullRequestPage>();
             services.AddTransient<OperationPage>();
             services.AddTransient<PullRequestPage>();
@@ -44,9 +46,6 @@ namespace GitWave
             services.AddSingleton<MainWindow>();
 
             Services = services.BuildServiceProvider();
-
-            // Start Kestrel listener for OAuth
-            Globals.InitiateListener();
 
             // Resolve MainWindow and show
             var mainWindow = Services.GetRequiredService<MainWindow>();

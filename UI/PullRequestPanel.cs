@@ -5,8 +5,8 @@ using System.Windows;
 
 namespace GitWave.UI
 {
-    [Display("Git Source Control", Group: "Version Control")]
-    public class GitWaveDockPanel : ITapDockPanel
+    [Display("Pull Request", Group: "GitWave")]
+    public class PullRequestPanel : ITapDockPanel
     {
         public double? DesiredWidth => 500;
 

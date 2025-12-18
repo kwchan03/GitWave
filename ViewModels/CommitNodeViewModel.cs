@@ -79,8 +79,8 @@ namespace GitWave.ViewModels
 
                 await Task.WhenAll(tOld, tNew);
 
-                var before = GitHelper.DeserializeTestPlan(await tOld);
-                var after = GitHelper.DeserializeTestPlan(await tNew);
+                var before = TestPlanHelper.DeserializeTestPlan(await tOld);
+                var after = TestPlanHelper.DeserializeTestPlan(await tNew);
 
                 if (before == null && after == null)
                 {
@@ -89,7 +89,7 @@ namespace GitWave.ViewModels
                     return;
                 }
 
-                var vm = new DiffViewerTreeViewModel();
+                var vm = new DiffViewerViewModel();
                 vm.Load(before ?? new TestPlan(), after ?? new TestPlan());
 
                 using (var win = new DiffViewerWindow(vm) { Owner = System.Windows.Application.Current.MainWindow })

@@ -31,14 +31,10 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <!-- Row 0: Header -->
-                <RowDefinition Height="Auto"/>
-                <!-- Row 1: Repository -->
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="5*"/>
                 <!-- Row 2: Main content (Changes, Branch, etc.) -->
-                <RowDefinition Height="250" MaxHeight="300"/>
+                <RowDefinition Height="3*"/>
                 <!-- Row 3: Commit Graph -->
-                <RowDefinition Height="50"/>
-                <!-- Row 4: Output Log -->
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Right" Margin="5">
@@ -57,64 +53,8 @@
                 
             </StackPanel>
 
-            <GroupBox Grid.Row="1" Header="Repository" Margin="0,0,0,10">
-                <StackPanel Orientation="Vertical" Margin="10">
-                    <!-- Row 1: Local Repo -->
-                    <DockPanel LastChildFill="True" VerticalAlignment="Top">
-                        <Label Content="Path:" DockPanel.Dock="Left" VerticalAlignment="Center"/>
-                        <Button Content="Create"
-                    Command="{Binding CreateRepoCommand}"
-                    Margin="5,0,0,0"
-                    MinWidth="75"
-                    VerticalAlignment="Center"
-                    DockPanel.Dock="Right"/>
-                        <Button Content="Open"
-                    Command="{Binding OpenRepoCommand}"
-                    MinWidth="75"
-                    VerticalAlignment="Center"
-                    DockPanel.Dock="Right"/>
-                        <Button Content="Browse…"
-                    Command="{Binding BrowseFolderCommand}"
-                    MinWidth="75"
-                    Margin="5,0"
-                    VerticalAlignment="Center"
-                    DockPanel.Dock="Right"/>
-                        <TextBox Text="{Binding RepoPath}"
-                    Margin="5,0"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Stretch"/>
-                    </DockPanel>
-
-                    <!-- Row 2: Clone Repo -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <Label 
-                            Grid.Column="0" 
-                            Content="Source URL:" 
-                            VerticalAlignment="Center"/>
-                        <TextBox 
-                            Grid.Column="1" 
-                            Text="{Binding SourceUrl}" 
-                            Margin="5,0" 
-                            VerticalAlignment="Center"/>
-                        <Button 
-                            Grid.Column="2" 
-                            Content="Clone" 
-                            Command="{Binding CloneRepoCommand}" 
-                            MinWidth="75" 
-                            VerticalAlignment="Center"/>
-                    </Grid>
-
-                </StackPanel>
-            </GroupBox>
-
             <!-- Main Content -->
-            <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid Grid.Row="1" Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="3*"/>
                     <ColumnDefinition Width="2.5*"/>
@@ -138,58 +78,99 @@
                         </Grid.RowDefinitions>
 
                         <!-- Staged Changes Label -->
-                        <Label Grid.Row="0" Content="Staged Changes" FontWeight="Bold" Margin="2"/>
+                        <DockPanel Grid.Row="0" LastChildFill="False" Margin="2">
+                            <Label Content="Staged Changes" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Button Command="{Binding UnstageAllCommand}" 
+                                    DockPanel.Dock="Right" 
+                                    ToolTip="Stage All"
+                                    Padding="8,2" FontSize="11" BorderThickness="0" Background="Transparent">
+                                <TextBlock Text="&#xE108;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="OrangeRed"/>
+                            </Button>
+                        </DockPanel>
 
                         <!-- Staged Changes TreeView -->
-                        <TreeView Grid.Row="1" ItemsSource="{Binding StagedChanges}" VerticalAlignment="Stretch" BorderThickness="0" 
-                    SelectedItemChanged="TreeView_SelectedItemChanged">
-                            <TreeView.ItemTemplate>
+                        <ListView Grid.Row="1" ItemsSource="{Binding StagedChanges}" Background="Transparent" HorizontalContentAlignment="Stretch"  BorderThickness="0">
+                            <ListView.ItemTemplate>
                                 <DataTemplate DataType="{x:Type localModels:ChangeItem}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding FilePath}" />
-                                        <TextBlock Text="{Binding Status}" Foreground="Green" Margin="5"/>
-                                    </StackPanel>
+                                    <DockPanel LastChildFill="True" HorizontalAlignment="Stretch">
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                            <Button Command="{Binding DataContext.UnstageCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Unstage"
+                                                    Background="Transparent" BorderThickness="0" Margin="2,0">
+                                                <TextBlock Text="&#xE108;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="OrangeRed"/>
+                                            </Button>
+                                            <Button Command="{Binding DataContext.ShowCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="View Diff"
+                                                    Background="Transparent" BorderThickness="0" Margin="2,0">
+                                                <TextBlock Text="&#xE7C3;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="DodgerBlue"/>
+                                            </Button>
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding FilePath}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Status}" Foreground="Green" Margin="8,0" FontSize="11" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </DockPanel>
                                 </DataTemplate>
-                            </TreeView.ItemTemplate>
-                        </TreeView>
+                            </ListView.ItemTemplate>
+                        </ListView>
 
                         <!-- Unstaged Changes Label -->
-                        <Label Grid.Row="2" Content="Unstaged Changes" FontWeight="Bold" Margin="2"/>
+                        <DockPanel Grid.Row="2" LastChildFill="False" Margin="2,10,2,2">
+                            <Label Content="Unstaged Changes" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Button Command="{Binding StageAllCommand}" 
+                                    DockPanel.Dock="Right" 
+                                    ToolTip="Stage All"
+                                    Padding="8,2" FontSize="11" BorderThickness="0" Background="Transparent">
+                                <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="Green"/>
+                            </Button>
+                        </DockPanel>
 
                         <!-- Unstaged Changes TreeView -->
-                        <TreeView Grid.Row="3" ItemsSource="{Binding UnstagedChanges}" VerticalAlignment="Stretch" BorderThickness="0" 
-                    SelectedItemChanged="TreeView_SelectedItemChanged">
-                            <TreeView.ItemTemplate>
+                        <ListView Grid.Row="3" ItemsSource="{Binding UnstagedChanges}" Background="Transparent" HorizontalContentAlignment="Stretch" BorderThickness="0">
+                            <ListView.ItemTemplate>
                                 <DataTemplate DataType="{x:Type localModels:ChangeItem}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding FilePath}" />
-                                        <TextBlock Text="{Binding Status}" Foreground="Red" Margin="5"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </TreeView.ItemTemplate>
-                        </TreeView>
+                                    <DockPanel LastChildFill="True" HorizontalAlignment="Stretch">
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                            <Button Command="{Binding DataContext.StageCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Stage"
+                                                    Background="Transparent" BorderThickness="0" Margin="2,0">
+                                                <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="Green"/>
+                                            </Button>
+                                            <Button Command="{Binding DataContext.ShowCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="View Diff"
+                                                    Background="Transparent" BorderThickness="0" Margin="2,0">
+                                                <TextBlock Text="&#xE7C3;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="DodgerBlue"/>
+                                            </Button>
+                                        </StackPanel>
 
-                        <!-- Buttons below Staged Changes TreeView -->
-                        <WrapPanel Grid.Row="4" HorizontalAlignment="Center">
-                            <Button Content="Stage" Width="75" Margin="5" Command="{Binding StageCommand}" CommandParameter="{Binding SelectedChange}" />
-                            <Button Content="Unstage" Width="75" Margin="5" Command="{Binding UnstageCommand}" CommandParameter="{Binding SelectedChange}" />
-                            <Button Content="Show" Width="75" Margin="5" Command="{Binding ShowCommand}" />
-                        </WrapPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding FilePath}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Status}" Foreground="Red" Margin="8,0" FontSize="11" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                     </Grid>
                 </GroupBox>
 
                 <!-- Commit & Branch Panel -->
                 <Grid Grid.Column="1" Margin="5">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="1*"/>
+                        <RowDefinition Height="4*"/>
                         <!-- Commit box -->
-                        <RowDefinition Height="1*"/>
+                        <RowDefinition Height="5*"/>
                         <!-- Branch box -->
                     </Grid.RowDefinitions>
 
                     <!-- ── Commit only ──────────────── -->
                     <GroupBox Header="Commit" Grid.Row="0" Margin="0,0,0,5">
-                        <Grid Margin="10">
+                        <Grid Margin="5">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <!-- Label -->
@@ -205,7 +186,9 @@
 
                             <TextBox 
                                 Grid.Row="1"
+                                Style="{StaticResource InputBoxStyle}"
                                 Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" 
+                                MinHeight="15"
                                 AcceptsReturn="True"
                                 TextWrapping="Wrap"
                                 VerticalScrollBarVisibility="Auto"
@@ -217,8 +200,8 @@
                                 Grid.Row="2"
                                 Content="Commit"
                                 Command="{Binding CommitCommand}"
-                                Width="100"
-                                HorizontalAlignment="Center"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                HorizontalAlignment="Stretch"
                                 Margin="0,5,0,0"/>
                         </Grid>
                     </GroupBox>
@@ -249,17 +232,20 @@
                                 </Grid>
 
                                 <!-- Merge / Delete -->
-                                <WrapPanel HorizontalAlignment="Center">
+                                <UniformGrid Columns="3">
                                     <Button Content="Checkout"
-                                    Command="{Binding CheckoutBranchCommand}"
-                                    Width="80" Margin="4"/>
+                                            Command="{Binding CheckoutBranchCommand}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Width="80" Margin="4"/>
                                     <Button Content="Merge"
-                                    Command="{Binding MergeBranchCommand}"
-                                    Width="80" Margin="4"/>
+                                            Command="{Binding MergeBranchCommand}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Width="80" Margin="4"/>
                                     <Button Content="Delete"
-                                    Command="{Binding DeleteBranchCommand}"
-                                    Width="80" Margin="4"/>
-                                </WrapPanel>
+                                            Command="{Binding DeleteBranchCommand}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Width="80" Margin="4"/>
+                                </UniformGrid>
 
                                 <!-- Create new branch -->
                                 <Grid Margin="0,10,0,0">
@@ -267,24 +253,22 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0"
-                                     Text="{Binding NewBranchName, UpdateSourceTrigger=PropertyChanged}"
-                                     Margin="0,0,6,0"/>
+                                    <TextBox Style="{StaticResource InputBoxStyle}"
+                                             Grid.Column="0"
+                                             Text="{Binding NewBranchName, UpdateSourceTrigger=PropertyChanged}"
+                                             Margin="0,0,6,0"/>
                                     <Button Grid.Column="1"
-                                    Content="New Branch"
-                                    Command="{Binding CreateBranchCommand}"
-                                    Width="90"/>
+                                            Content="New Branch"
+                                            Command="{Binding CreateBranchCommand}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Width="90"/>
                                 </Grid>
 
                                 <!-- Push / Pull -->
-                                <WrapPanel HorizontalAlignment="Center" Margin="0,10,0,0">
-                                    <Button Content="Push"
-                                    Command="{Binding PushCommand}"
-                                    Width="90" Margin="4"/>
-                                    <Button Content="Pull"
-                                    Command="{Binding PullCommand}"
-                                    Width="90" Margin="4"/>
-                                </WrapPanel>
+                                <UniformGrid Columns="2">
+                                    <Button Content="Push" Command="{Binding PushCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="4" Background="#2DA44E" Foreground="White"/>
+                                    <Button Content="Pull" Command="{Binding PullCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="4" Background="#2DA44E" Foreground="White"/>
+                                </UniformGrid>
                             </StackPanel>
                         </ScrollViewer>
                     </GroupBox>
@@ -292,24 +276,9 @@
             </Grid>
 
             <!-- Commit Graph now full width above Output Log -->
-            <GroupBox Header="Commit Graph" Grid.Row="3" Margin="5">
+            <GroupBox Header="Commit Graph" Grid.Row="2" Margin="5">
                 <controls:CommitGraphView
                     DataContext="{Binding Graph}"/>
-            </GroupBox>
-
-
-            <!-- Output Log -->
-            <GroupBox Header="Output Log" Grid.Row="4" Grid.ColumnSpan="2">
-                <TextBox x:Name="OutputTextBox"
-                 IsReadOnly="True"
-                 Text="{Binding OutputLog, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
-                 TextWrapping="Wrap"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto"
-                 FontFamily="Consolas"
-                 Background="Black"
-                 Foreground="LightGreen"
-                 Height="Auto"/>
             </GroupBox>
         </Grid>
     </Grid>

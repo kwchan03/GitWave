@@ -1,11 +1,12 @@
-﻿using GitWave.UI.Pages;
+﻿using GitGUI.Core;
+using GitWave.UI.Pages;
 using Keysight.OpenTap.Wpf;
 using OpenTap;
 using System.Windows;
 
 namespace GitWave.UI
 {
-    [Display("Git Source Control", Group: "Version Control")]
+    [Display("Source Control", Group: "GitWave")]
     public class SourceControlPanel : ITapDockPanel
     {
         public double? DesiredWidth => 500;
@@ -14,7 +15,9 @@ namespace GitWave.UI
 
         public FrameworkElement CreateElement(ITapDockContext context)
         {
-            return new SourceControlControl();
+            Bootstrapper.Initialize(); // Ensure services exist
+
+            return Bootstrapper.Services.GetRequiredService<OperationPage>();
         }
     }
 }

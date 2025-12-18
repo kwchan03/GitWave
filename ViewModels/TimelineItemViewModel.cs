@@ -20,11 +20,4 @@
         public string CreatedAtDisplay => CreatedAt.ToString("MMM d, yyyy h:mm tt");
         public UserViewModel Actor { get; set; }
     }
-
-    public class UserViewModel
-    {
-        public string Login { get; set; }
-        public string AvatarUrl { get; set; }
-        public string HtmlUrl { get; set; }
-    }
 }

@@ -3,7 +3,6 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-      xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
       mc:Ignorable="d" 
       d:DesignHeight="450" d:DesignWidth="800"
       Title="Login"
@@ -17,7 +16,7 @@
 
         <!-- Logo & Title -->
         <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
-            <Image Source="C:\Users\chank\Documents\UM\Y3S2\WIA3002 ACADEMIC PROJECT I\GitGUI\Assets\KeysightLogo.png"
+            <Image Source="/Assets/KeysightLogo.png"
                    Width="600" Height="100"
                    Margin="0,0,0,30"/>
             <TextBlock Text="PTEM GitWave"
@@ -35,10 +34,9 @@
                 Margin="0,0,0,75"
                 Width="220">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <materialDesign:PackIcon 
-                    Kind="Github" 
-                    Width="24" Height="24"
-                    Margin="0,0,8,0"/>
+                <Image Source="/Assets/GitHub_Icon.png" 
+                       Width="24" Height="24"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
                 <TextBlock 
                     Text="Login with GitHub" 
                     VerticalAlignment="Center" 

@@ -29,15 +29,24 @@ namespace GitWave.ViewModels
             private set { if (_isBusy != value) { _isBusy = value; OnPropertyChanged(); } }
         }
 
-        private double _graphWidth = 180;
+        private double _graphWidth = 40.0;  // Start with minimum
         public double GraphWidth
         {
             get => _graphWidth;
             private set { if (Math.Abs(_graphWidth - value) > 0.01) { _graphWidth = value; OnPropertyChanged(); } }
         }
 
+        private double _minGraphWidth = 40.0;
+        public double MinGraphWidth
+        {
+            get => _minGraphWidth;
+            private set { if (Math.Abs(_minGraphWidth - value) > 0.01) { _minGraphWidth = value; OnPropertyChanged(); } }
+        }
+
         // Config
         public double LaneWidth { get; set; } = 14.0;
+        private const double BasePadding = 24.0;
+        private const int PaddingLanes = 1;
 
         // Context moved to IGitService
         public string? BranchName { get; private set; }
@@ -51,6 +60,7 @@ namespace GitWave.ViewModels
         public CommitGraphViewModel(IGitService git)
         {
             _git = git ?? throw new ArgumentNullException(nameof(git));
+            MinGraphWidth = CalculateMinGraphWidth(0);
             RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         }
 
@@ -76,8 +86,6 @@ namespace GitWave.ViewModels
                     var commits = _git.FetchCommitsForGraph();
 
                     // Build rows from LibGit2Sharp.Commit objects
-                    //var rowsFromCommits = CommitGraphBuilder.BuildFromCommits(commits);
-                    //int maxLane = rowsFromCommits.Count > 0 ? rowsFromCommits.Max(r => r.PrimaryLane) : 0;
                     var list = CommitRowFactory.FromCommits(commits, _git);
                     var layouter = new CommitGraphLayouter();
                     layouter.Layout(list);
@@ -92,18 +100,36 @@ namespace GitWave.ViewModels
                     Items.Add(r);
                 System.Diagnostics.Debug.WriteLine($"[DBG] CommitGraphVM.Items.Count = {Items.Count}");
 
-                // compute width
-                const double BaseGraphWidth = 24.0;
-                const int PaddingLanes = 1;
+                // Compute and apply graph width with minimum enforcement
                 int lanes = maxLaneUsed + 1;
-                GraphWidth = (lanes <= 1)
-                    ? BaseGraphWidth
-                    : Math.Max(BaseGraphWidth, LaneWidth * (lanes + PaddingLanes));
+                double calculatedWidth = CalculateGraphWidth(lanes);
+                GraphWidth = Math.Max(MinGraphWidth, calculatedWidth);
+
+                System.Diagnostics.Debug.WriteLine($"[DBG] Lanes: {lanes}, GraphWidth: {GraphWidth}, MinGraphWidth: {MinGraphWidth}");
             }
             finally
             {
                 IsBusy = false;
             }
+        }
+
+        /// <summary>
+        /// Calculate minimum graph width based on base padding and lane count
+        /// </summary>
+        private double CalculateMinGraphWidth(int laneCount)
+        {
+            return BasePadding + (laneCount * LaneWidth);
+        }
+
+        /// <summary>
+        /// Calculate the actual graph width with proper padding
+        /// </summary>
+        private double CalculateGraphWidth(int laneCount)
+        {
+            if (laneCount <= 1)
+                return BasePadding;
+
+            return Math.Max(BasePadding, LaneWidth * (laneCount + PaddingLanes));
         }
 
         public async Task RefreshAsync() => await LoadAllBranchesAsync();
@@ -121,7 +147,7 @@ namespace GitWave.ViewModels
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-        // Debug helper - put this inside CommitGraphVM
+        // Debug helper
         private void DebugDumpRows(IEnumerable<CommitRowViewModel> rows)
         {
             System.Diagnostics.Debug.WriteLine("=== CommitGraph DebugDumpRows ===");
@@ -136,6 +162,5 @@ namespace GitWave.ViewModels
             }
             System.Diagnostics.Debug.WriteLine("=== end dump ===");
         }
-
     }
 }

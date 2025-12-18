@@ -8,10 +8,10 @@ namespace GitWave.Controls
     /// </summary>
     public partial class DiffViewerWindow : Window, IDisposable
     {
-        private DiffViewerTreeViewModel? _viewModel;
+        private DiffViewerViewModel? _viewModel;
         private bool _disposed = false;
 
-        public DiffViewerWindow(DiffViewerTreeViewModel vm)
+        public DiffViewerWindow(DiffViewerViewModel vm)
         {
             InitializeComponent();
             _viewModel = vm;

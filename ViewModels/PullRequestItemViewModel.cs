@@ -149,10 +149,10 @@ namespace GitWave.ViewModels
                 // 3. Parse Strings into TestPlans
                 //    (Replaces GitHelper.LoadTestPlanFromCommit)
                 if (!string.IsNullOrEmpty(await tOld))
-                    before = GitHelper.DeserializeTestPlan(await tOld);
+                    before = TestPlanHelper.DeserializeTestPlan(await tOld);
 
                 if (!string.IsNullOrEmpty(await tNew))
-                    after = GitHelper.DeserializeTestPlan(await tNew);
+                    after = TestPlanHelper.DeserializeTestPlan(await tNew);
 
                 // 4. Validate (Mirrors your reference check)
                 if (before == null && after == null)
@@ -163,7 +163,7 @@ namespace GitWave.ViewModels
                 }
 
                 // 5. Load VM and Open Window (Identical to reference)
-                var vm = new DiffViewerTreeViewModel();
+                var vm = new DiffViewerViewModel();
 
                 // Handle case where one side is missing (Added/Deleted file) by providing empty plan
                 vm.Load(before ?? new TestPlan(), after ?? new TestPlan());

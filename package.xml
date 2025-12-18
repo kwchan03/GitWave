@@ -7,9 +7,9 @@ For Version the following macro is available (Only works if the project director
 $(GitVersion) - Gets the version from Git in the recommended format Major.Minor.Build-PreRelease+CommitHash.BranchName.
 -->
 <Package Name="package" xmlns="http://opentap.io/schemas/package" InfoLink="" Version="0.1.0-alpha" OS="Windows,Linux">
-  <Description>This is my OpenTAP plugin package.</Description>
-  <Files>
-    <File Path="Packages/GitWave/GitWave.dll" SourcePath="GitWave.dll">
+<Description>This is my OpenTAP plugin package.</Description>
+	<Files>
+	<File Path="Packages/GitWave/GitWave.dll" SourcePath="GitWave.dll">
 		<Plugins>
 			<Plugin Type="GitWave.SourceControlPanel" BaseType="ITapDockPanel">
 				<Name>Source Control</Name>
