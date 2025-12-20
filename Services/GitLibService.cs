@@ -3,6 +3,9 @@ using GitWave.Models;
 using LibGit2Sharp;
 using System.Diagnostics;
 using System.IO;
+using Commit = LibGit2Sharp.Commit;
+using Repository = LibGit2Sharp.Repository;
+using Signature = LibGit2Sharp.Signature;
 
 namespace GitWave.Services
 {
@@ -12,11 +15,7 @@ namespace GitWave.Services
         private readonly IGitCredentialProvider _gitCreds;
         private GitHubUser _authenticatedUser;
 
-        public GitHubUser AuthenticatedUser
-        {
-            get => _authenticatedUser;
-            set => _authenticatedUser = value; // Logic to update _repo config if needed
-        }
+        public GitHubUser AuthenticatedUser { get; set; }
 
         public GitLibService(IGitCredentialProvider gitCreds)
         {
@@ -168,6 +167,21 @@ namespace GitWave.Services
             if (target == null) throw new InvalidOperationException($"Branch '{branchName}' not found.");
             var signature = BuildSignature();
             _repo.Merge(target, signature);
+        }
+
+        public void DeleteBranch(string branchName)
+        {
+            if (_repo == null)
+                throw new InvalidOperationException("Repository not opened.");
+
+            var branch = _repo.Branches[branchName];
+            if (branch == null)
+                throw new InvalidOperationException($"Branch '{branchName}' not found");
+
+            if (branch.IsCurrentRepositoryHead)
+                throw new InvalidOperationException($"Cannot delete the currently checked out branch '{branchName}'");
+
+            _repo.Branches.Remove(branchName);
         }
 
         public void Commit(string message)

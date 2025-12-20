@@ -104,7 +104,7 @@ namespace GitWave.ViewModels
                 // Process each commit and fetch its files
                 foreach (var c in commits)
                 {
-                    var commitVM = new CommitNodeViewModel(_apiService, _owner, _repo)
+                    var commitVM = new CommitNodeViewModel(_apiService, _owner, _repo, this)
                     {
                         Message = c.Commit.Message,
                         Sha = c.Sha,
@@ -121,11 +121,11 @@ namespace GitWave.ViewModels
             }
         }
 
-        private async void ExecuteViewFileDiff(FileChangeViewModel? file)
+        public async Task ViewFileDiffAsync(FileChangeViewModel file, string beforeSha, string afterSha)
         {
             if (file == null) return;
 
-            // 1. Check File Extension (Identical to reference)
+            // Check File Extension
             if (!file.FilePath.EndsWith(".TapPlan", StringComparison.OrdinalIgnoreCase))
             {
                 MessageBox.Show("Diff Viewer currently supports only .TapPlan files.",
@@ -139,22 +139,20 @@ namespace GitWave.ViewModels
                 TestPlan? before = null;
                 TestPlan? after = null;
 
-                // 2. Fetch Content from GitHub API
-                //    (We fetch raw strings instead of blobs)
-                var tOld = _apiService.GetFileContentAsync(_owner, _repo, _model.Base.Sha, file.FilePath);
-                var tNew = _apiService.GetFileContentAsync(_owner, _repo, _model.Head.Sha, file.FilePath);
+                // Fetch Content from GitHub API
+                var tOld = _apiService.GetFileContentAsync(_owner, _repo, beforeSha, file.FilePath);
+                var tNew = _apiService.GetFileContentAsync(_owner, _repo, afterSha, file.FilePath);
 
                 await Task.WhenAll(tOld, tNew);
 
-                // 3. Parse Strings into TestPlans
-                //    (Replaces GitHelper.LoadTestPlanFromCommit)
+                // Parse Strings into TestPlans
                 if (!string.IsNullOrEmpty(await tOld))
                     before = TestPlanHelper.DeserializeTestPlan(await tOld);
 
                 if (!string.IsNullOrEmpty(await tNew))
                     after = TestPlanHelper.DeserializeTestPlan(await tNew);
 
-                // 4. Validate (Mirrors your reference check)
+                // Validate
                 if (before == null && after == null)
                 {
                     MessageBox.Show("Unable to load either side for diff.",
@@ -162,13 +160,10 @@ namespace GitWave.ViewModels
                     return;
                 }
 
-                // 5. Load VM and Open Window (Identical to reference)
+                // Load VM and Open Window
                 var vm = new DiffViewerViewModel();
-
-                // Handle case where one side is missing (Added/Deleted file) by providing empty plan
                 vm.Load(before ?? new TestPlan(), after ?? new TestPlan());
 
-                // Use the existing Window control you have
                 using (var win = new DiffViewerWindow(vm) { Owner = System.Windows.Application.Current.MainWindow })
                 {
                     win.ShowDialog();

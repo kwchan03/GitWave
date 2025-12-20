@@ -59,7 +59,11 @@ namespace GitWave.ViewModels
         private async void InitializeAsync()
         {
             var user = _gitService.AuthenticatedUser;
-            if (user == null) return; // Not logged in
+            if (user == null)
+            {
+                Debug.WriteLine("Debug: No authenticated user found in GitService.");
+                return;
+            }
 
             _apiService = new GitHubApiService(user.AccessToken);
             var (owner, repo) = _gitService.GetRemoteRepoInfo();

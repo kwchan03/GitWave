@@ -6,14 +6,14 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
     </UserControl.Resources>
-    
+
     <StackPanel>
         <!-- Top summary -->
         <Grid SnapsToDevicePixels="True" Margin="0,1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <!-- Graph area -->
                 <ColumnDefinition Width="*"/>
+                <!-- Graph area -->
+                <ColumnDefinition Width="540"/>
                 <!-- Text area -->
             </Grid.ColumnDefinitions>
 
@@ -26,7 +26,7 @@
             <local:GraphCell Grid.RowSpan="2" Grid.Column="0" Row="{Binding}"
                              MinWidth="{Binding DataContext.MinGraphWidth, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWay}"
                              VerticalAlignment="Stretch"
-                             HorizontalAlignment="Left"
+                             HorizontalAlignment="Stretch"
                              IsHitTestVisible="False"/>
 
             <!-- Right: Main Commit Row -->

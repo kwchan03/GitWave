@@ -1,6 +1,7 @@
 ﻿using GitGUI.Core;
 using GitWave.UI.Pages;
 using Keysight.OpenTap.Wpf;
+using Microsoft.Extensions.DependencyInjection;
 using OpenTap;
 using System.Windows;
 

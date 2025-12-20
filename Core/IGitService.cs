@@ -18,6 +18,7 @@ namespace GitWave.Core
         void CheckoutBranch(string branchName);
         void CreateBranch(string newBranchName);
         void MergeBranch(string branchToMerge);
+        void DeleteBranch(string branchName);
         (IEnumerable<ChangeItem> StagedChanges, IEnumerable<ChangeItem> UnstagedChanges) GetChanges();
         void StageFile(string relativePath);
         void UnstageFile(string relativePath);

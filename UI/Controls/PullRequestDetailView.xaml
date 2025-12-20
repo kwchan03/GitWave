@@ -98,17 +98,24 @@
                                     </HierarchicalDataTemplate>
 
                                     <DataTemplate DataType="{x:Type vm:FileChangeViewModel}">
-                                        <StackPanel Orientation="Horizontal" Margin="5,0" PreviewMouseLeftButtonUp="OnChangedFileClick">
-                                            <TextBlock FontFamily="Segoe MDL2 Assets"
-                                                        VerticalAlignment="Center"
-                                                        Text="{Binding IconGlyph}"
-                                                        Foreground="{Binding IconColor}"
-                                                        FontSize="12"
-                                                        FontWeight="ExtraBold"
-                                                        Width="20"/>
-                                            <TextBlock Text="{Binding FileName}"
-                                                        Foreground="{Binding IconColor}"/>
-                                        </StackPanel>
+                                        <Button Command="{Binding RelativeSource={RelativeSource AncestorType=TreeViewItem, AncestorLevel=2}, Path=DataContext.ViewFileDiffCommand}"
+                                                CommandParameter="{Binding}"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                HorizontalContentAlignment="Left"
+                                                Cursor="Hand">
+                                            <StackPanel Orientation="Horizontal" Margin="5,0">
+                                                <TextBlock FontFamily="Segoe MDL2 Assets"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding IconGlyph}"
+                                                           Foreground="{Binding IconColor}"
+                                                           FontSize="12"
+                                                           FontWeight="ExtraBold"
+                                                           Width="20"/>
+                                                <TextBlock Text="{Binding FileName}"
+                                                           Foreground="{Binding IconColor}"/>
+                                            </StackPanel>
+                                        </Button>
                                     </DataTemplate>
                                 </TreeView.Resources>
                             </TreeView>

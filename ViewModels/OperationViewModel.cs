@@ -17,8 +17,6 @@ namespace GitWave.ViewModels
     {
         private readonly IGitService _git;
 
-        public GitHubUser AuthenticatedUser { get; set; }
-
         // --- State ---
         private string _repoPath = "";
         public string RepoPath
@@ -53,6 +51,7 @@ namespace GitWave.ViewModels
         public ICommand LoadBranchesCommand { get; }
         public ICommand CheckoutBranchCommand { get; }
         public ICommand CreateBranchCommand { get; }
+        public ICommand DeleteBranchCommand { get; }
         public ICommand MergeBranchCommand { get; }
 
         // File Ops
@@ -82,6 +81,7 @@ namespace GitWave.ViewModels
             CheckoutBranchCommand = new AsyncRelayCommand(_ => ExecuteCheckoutBranch(), _ => SelectedBranch != null);
             CreateBranchCommand = new RelayCommand(_ => ExecuteCreateBranch());
             MergeBranchCommand = new RelayCommand(_ => ExecuteMergeBranch(), _ => SelectedBranch != null);
+            DeleteBranchCommand = new RelayCommand(_ => ExecuteDeleteBranch());
 
             // File changes
             RefreshChangesCommand = new RelayCommand(_ => ExecuteRefreshChanges());
@@ -205,6 +205,41 @@ namespace GitWave.ViewModels
             catch (Exception ex) { MessageBox.Show($"Merge failed: {ex.Message}"); }
         }
 
+        private void ExecuteDeleteBranch()
+        {
+            if (SelectedBranch == null) return;
+
+            // Prevent deleting current branch
+            if (SelectedBranch.IsCurrent)
+            {
+                MessageBox.Show("Cannot delete the currently checked out branch.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Confirm deletion
+            var result = MessageBox.Show(
+                $"Are you sure you want to delete branch '{SelectedBranch.Name}'?",
+                "Confirm Delete",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question
+            );
+
+            if (result != MessageBoxResult.Yes) return;
+
+            try
+            {
+                _git.DeleteBranch(SelectedBranch.Name);
+                MessageBox.Show($"Branch '{SelectedBranch.Name}' deleted successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                ExecuteLoadBranches();
+                ExecuteLoadCommits();
+                ExecuteRefreshChanges();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Delete branch failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void ExecuteStageFile(object? parameter)
         {
             if (parameter is ChangeItem item)
@@ -281,7 +316,7 @@ namespace GitWave.ViewModels
         {
             try
             {
-                await Task.Run(() => _git.PullCurrentBranch(RepoPath, AuthenticatedUser));
+                await Task.Run(() => _git.PullCurrentBranch(RepoPath, _git.AuthenticatedUser));
                 ExecuteLoadCommits();
                 ExecuteRefreshChanges();
                 await Graph.RefreshAsync();
@@ -293,7 +328,7 @@ namespace GitWave.ViewModels
         {
             try
             {
-                await Task.Run(() => _git.PushCurrentBranch(RepoPath, AuthenticatedUser));
+                await Task.Run(() => _git.PushCurrentBranch(RepoPath, _git.AuthenticatedUser));
                 await Graph.RefreshAsync();
             }
             catch (Exception ex) { MessageBox.Show($"Push failed: {ex.Message}"); }
