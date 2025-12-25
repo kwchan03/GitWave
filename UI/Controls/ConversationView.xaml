@@ -36,7 +36,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <TextBlock Text="{Binding ShortSha}" FontFamily="Consolas" Foreground="#0366d6" HorizontalAlignment="Right"/>
-                    <TextBlock Text="{Binding CreatedAtDisplay}" FontSize="11" Foreground="Gray" HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding CreatedAtDisplay, Mode=OneWay}" FontSize="11" Foreground="Gray" HorizontalAlignment="Right"/>
                 </StackPanel>
             </Grid>
         </DataTemplate>
@@ -62,7 +62,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding Actor.Login}" FontWeight="Bold"/>
                                 <TextBlock Text=" commented " Foreground="#586069"/>
-                                <TextBlock Text="{Binding CreatedAtDisplay}" Foreground="#586069"/>
+                                <TextBlock Text="{Binding CreatedAtDisplay, Mode=OneWay}" Foreground="#586069"/>
                             </StackPanel>
                         </Border>
                         <md:MarkdownViewer Grid.Row="1"
@@ -158,7 +158,7 @@
                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="13">
                     <Run Text="{Binding Actor.Login}" FontWeight="Bold"/>
                     <Run Text="{Binding Description}" Foreground="#586069"/>
-                    <Run Text="{Binding CreatedAtDisplay}" Foreground="Gray" FontSize="11"/>
+                    <Run Text="{Binding CreatedAtDisplay, Mode=OneWay}" Foreground="Gray" FontSize="11"/>
                 </TextBlock>
             </Grid>
         </DataTemplate>
