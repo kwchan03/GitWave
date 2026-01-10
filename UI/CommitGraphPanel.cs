@@ -8,19 +8,17 @@ using System.Windows;
 
 namespace GitWave.UI
 {
-    [Display("Source Control", Group: "GitWave")]
-    public class SourceControlPanel : ITapDockPanel
+    [Display("Commit Graph", Group: "GitWave")]
+    public class CommitGraphPanel : ITapDockPanel
     {
         public double? DesiredWidth => 500;
-
         public double? DesiredHeight => 450;
-
         public FrameworkElement CreateElement(ITapDockContext context)
         {
             Bootstrapper.Initialize();
             var contextService = Bootstrapper.Services.GetRequiredService<TapDockContextService>();
             contextService.Initialize(context);
-            return new SourceControlFrame();
+            return new CommitGraphView();
         }
     }
 }

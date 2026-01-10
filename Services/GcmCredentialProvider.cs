@@ -6,6 +6,8 @@ namespace GitWave.Services
     /// Requires GCM installed and configured (e.g., `git-credential-manager configure`).
     public sealed class GcmCredentialProvider : IGitCredentialProvider
     {
+        private const int ProcessTimeoutMs = 120000;
+
         public GitCredentials GetForUrl(string httpsRemoteUrl)
         {
             var uri = new Uri(httpsRemoteUrl);
@@ -54,10 +56,49 @@ namespace GitWave.Services
             };
             using var p = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {file} {args}");
             if (stdin != null) { p.StandardInput.Write(stdin); p.StandardInput.Close(); }
+            bool exited = p.WaitForExit(ProcessTimeoutMs);
+            if (!exited)
+            {
+                // ✅ Kill the process if it timed out
+                try
+                {
+                    p.Kill(entireProcessTree: true);
+                }
+                catch { /* ignore */ }
+
+                throw new TimeoutException($"GCM process did not complete within {ProcessTimeoutMs}ms");
+            }
             var outText = p.StandardOutput.ReadToEnd();
             var errText = p.StandardError.ReadToEnd();
-            p.WaitForExit();
             return (p.ExitCode, outText, errText);
+        }
+
+        public void Revoke(string url)
+        {
+            // 1. Parse the URL (e.g., https://github.com/)
+            if (!url.StartsWith("http")) url = "https://" + url;
+            var uri = new System.Uri(url);
+
+            // 2. Prepare the input for git credential reject
+            var input = $"protocol={uri.Scheme}\nhost={uri.Host}\n\n";
+
+            // 3. Call git credential reject
+            var psi = new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = "credential reject",
+                RedirectStandardInput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using (var proc = Process.Start(psi))
+            {
+                proc.StandardInput.Write(input);
+                proc.StandardInput.Flush();
+                proc.StandardInput.Close();
+                proc.WaitForExit();
+            }
         }
     }
 }

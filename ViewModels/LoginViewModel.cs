@@ -1,9 +1,10 @@
-﻿using GitWave.Core;
+﻿using GitGUI.Core;
+using GitWave.Core;
 using GitWave.Models;
 using GitWave.Services;
-using GitWave.UI.Pages;
 using Microsoft.Extensions.DependencyInjection;
-using System.Diagnostics;
+using OpenTap;
+using System.Windows;
 using System.Windows.Input;
 
 namespace GitWave.ViewModels
@@ -11,15 +12,18 @@ namespace GitWave.ViewModels
     public class LoginViewModel : BaseViewModel
     {
         private readonly GitHubAuthService _auth;
+        private readonly IGitService _gitService;
+
+        // 1. Create a Log Source for this component
+        private readonly TraceSource _log = Log.CreateSource("GitWave");
 
         public ICommand LoginCommand { get; }
 
-        // Inject GitHubAuthService via DI
-        public LoginViewModel(GitHubAuthService auth)
+        public LoginViewModel(GitHubAuthService auth, IGitService gitService)
         {
             _auth = auth ?? throw new ArgumentNullException(nameof(auth));
+            _gitService = gitService ?? throw new ArgumentNullException(nameof(gitService));
 
-            // Async login using GCM device flow
             LoginCommand = new RelayCommand(async _ => await SignInAsync());
         }
 
@@ -27,29 +31,50 @@ namespace GitWave.ViewModels
         {
             try
             {
-                // Triggers GCM (device flow) if not signed in; returns a token usable for API + Git
-                var (_username, token) = await _auth.SignInAsync();
-                Debug.WriteLine($"username: {_username} secret: {token}");
+                // 2. Log start of process
+                _log.Info("Starting GitHub login process...");
 
-                // Fetch the GitHub user using the same token
+                // Authenticate
+                var (_username, token) = await _auth.SignInAsync();
+                _log.Debug($"Device flow finished. Token received for user: {_username}");
+
+                // Fetch User Details
                 GitHubUser user = await _auth.GetCurrentUserAsync(token);
-                Debug.WriteLine($"username: {user.Login} secret: {user.AccessToken}");
-                // Make the token available to the rest of the app (for API calls)
-                var gitService = App.Services.GetRequiredService<IGitService>();
+
+                // 3. Log success
+                _log.Info($"Successfully retrieved user profile: {user.Login}");
+
+                // Update Service
+                var gitService = Bootstrapper.Services.GetRequiredService<IGitService>();
                 gitService.AuthenticatedUser = user;
 
-                // Navigate to the main page
-                App.Current.Dispatcher.Invoke(() =>
+                // (Optional) Log navigation attempt
+                _log.Debug("Updating navigation state...");
+
+                var navService = Bootstrapper.Services.GetRequiredService<NavigationService>();
+
+                if (_gitService.IsRepositoryOpen)
                 {
-                    var main = App.Services.GetRequiredService<MainWindow>();
-                    var repositoryPage = App.Services.GetRequiredService<RepositoryPage>();
-                    main.NavigateTo(repositoryPage);
-                });
+                    _log.Debug("Navigating to Operation and Pull Request Views...");
+                    navService.Navigate<OperationViewModel>(NavigationRegion.SourceControl);
+                    navService.Navigate<PullRequestPageViewModel>(NavigationRegion.PullRequest);
+                    navService.Navigate<CommitGraphViewModel>(NavigationRegion.CommitGraph);
+                }
+                else
+                {
+                    _log.Debug("Navigating to Repository View...");
+                    navService.Navigate<RepositoryViewModel>(NavigationRegion.SourceControl);
+                    navService.Navigate<RepositoryViewModel>(NavigationRegion.PullRequest);
+                    navService.Navigate<RepositoryViewModel>(NavigationRegion.CommitGraph);
+                }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"GitHub (GCM) login failed: {ex}");
-                // TODO: surface a user-friendly message in your UI if desired
+                // 4. Log the full error to OpenTAP
+                _log.Error($"GitHub Login Failed: {ex.Message}");
+                _log.Debug(ex); // Logs the full stack trace
+
+                MessageBox.Show($"Login Failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

@@ -6,6 +6,10 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 		<DebugWith>TUI</DebugWith>
 	</PropertyGroup>
 	
@@ -56,5 +60,4 @@
 			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</ApplicationDefinition>
 	 </ItemGroup>
-
 </Project>

@@ -1,19 +1,17 @@
-﻿using GitWave.ViewModels;
-using System.Windows.Controls;
+﻿using System.Windows.Controls;
 
 namespace GitWave.UI.Pages
 {
     /// <summary>  
     /// Interaction logic for Operation.xaml  
     /// </summary>  
-    public partial class OperationPage : Page
+    public partial class OperationPage : UserControl
     {
-        public OperationPage(OperationViewModel vm)
+        public OperationPage()
         {
             try
             {
                 InitializeComponent();
-                DataContext = vm;
             }
             catch (Exception ex)
             {

@@ -1,7 +1,8 @@
 ﻿using GitWave.ViewModels;
+using System.Windows;
 using System.Windows.Input;
 
-namespace GitWave.Controls
+namespace GitWave.UI.Controls
 {
     /// <summary>
     /// Interaction logic for CommitRowView.xaml
@@ -18,6 +19,20 @@ namespace GitWave.Controls
                 _viewModel = this.DataContext as CommitRowViewModel;
             };
         }
+
+        public static readonly DependencyProperty GraphAreaWidthProperty =
+        DependencyProperty.Register(
+            nameof(GraphAreaWidth),
+            typeof(double),
+            typeof(CommitRowView),
+            new PropertyMetadata(40.0)); // Default value matches MinGraphWidth
+
+        public double GraphAreaWidth
+        {
+            get => (double)GetValue(GraphAreaWidthProperty);
+            set => SetValue(GraphAreaWidthProperty, value);
+        }
+
         private void OnClick(object sender, MouseButtonEventArgs e)
         {
             if (DataContext is CommitRowViewModel row)

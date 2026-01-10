@@ -2,17 +2,17 @@
 using GitWave.Core;
 using GitWave.Models;
 using GitWave.Services;
+using OpenTap;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Windows.Input;
 
 namespace GitWave.ViewModels
 {
-    public sealed class CommitGraphViewModel : INotifyPropertyChanged, IDisposable
+    public class CommitGraphViewModel : BaseViewModel
     {
         private readonly IGitService _git;
 
+        private readonly TraceSource _log = Log.CreateSource("GitWave");
         public ObservableCollection<CommitRowViewModel> Items { get; } = new();
 
         private CommitRowViewModel? _selectedItem;
@@ -69,19 +69,11 @@ namespace GitWave.ViewModels
         {
             if (!_git.IsRepositoryOpen) return;
 
-            CancelInFlight();
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
             IsBusy = true;
             try
             {
-                Items.Clear();
-
                 var (rows, maxLaneUsed) = await Task.Run(() =>
                 {
-                    token.ThrowIfCancellationRequested();
-
                     // Preferred: fetch commits (all branches) from the injected service
                     var commits = _git.FetchCommitsForGraph();
 
@@ -92,9 +84,10 @@ namespace GitWave.ViewModels
 
                     int maxLane = list.Count > 0 ? list.Max(r => r.PrimaryLane) : 0;
                     return (list, maxLane);
-                }, token);
+                });
 
                 DebugDumpRows(rows);
+                Items.Clear();
 
                 foreach (var r in rows)
                     Items.Add(r);
@@ -133,19 +126,6 @@ namespace GitWave.ViewModels
         }
 
         public async Task RefreshAsync() => await LoadAllBranchesAsync();
-
-        private void CancelInFlight()
-        {
-            try { _cts?.Cancel(); } catch { /* ignore */ }
-            _cts?.Dispose();
-            _cts = null;
-        }
-
-        public void Dispose() => CancelInFlight();
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         // Debug helper
         private void DebugDumpRows(IEnumerable<CommitRowViewModel> rows)

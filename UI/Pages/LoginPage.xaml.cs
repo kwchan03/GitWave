@@ -1,14 +1,12 @@
-﻿using GitWave.ViewModels;
-using System.Windows.Controls;
+﻿using System.Windows.Controls;
 
 namespace GitWave.UI.Pages
 {
-    public partial class LoginPage : Page
+    public partial class LoginPage : UserControl
     {
-        public LoginPage(LoginViewModel vm)
+        public LoginPage()
         {
             InitializeComponent();
-            DataContext = vm;
         }
     }
 }

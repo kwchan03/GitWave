@@ -1,11 +1,13 @@
-﻿using GitWave.Core;
-using GitWave.Models; // For GitHubUser if needed
+﻿using GitGUI.Core;
+using GitWave.Core;
+using GitWave.Models;
 using GitWave.Services;
-using GitWave.UI.Pages;
-using Microsoft.Extensions.DependencyInjection; // For navigation
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
+using OpenTap;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using MessageBox = System.Windows.MessageBox;
 
 namespace GitWave.ViewModels
@@ -13,6 +15,8 @@ namespace GitWave.ViewModels
     public class RepositoryViewModel : BaseViewModel
     {
         private readonly IGitService _gitService;
+        private readonly TapDockContextService _tapContext;
+        private readonly TraceSource _log = Log.CreateSource("GitWave");
 
         // --- Properties ---
 
@@ -43,25 +47,95 @@ namespace GitWave.ViewModels
         public ICommand CloneRepoCommand { get; }
         public ICommand BrowseFolderCommand { get; }
 
-        public RepositoryViewModel(IGitService gitService)
+        public RepositoryViewModel(IGitService gitService, TapDockContextService tapContext)
         {
             _gitService = gitService;
-
-            // If the service stores the user, fetch it
-            if (_gitService is GitLibService gitLib)
-            {
-                // Assuming GitLibService might expose the user, or you pass it in via another way.
-                // For now, we can leave AuthenticatedUser null or set it if available.
-            }
+            _tapContext = tapContext;
 
             OpenRepoCommand = new AsyncRelayCommand(_ => OpenRepoAsync());
             CreateRepoCommand = new AsyncRelayCommand(_ => CreateRepoAsync());
             CloneRepoCommand = new AsyncRelayCommand(_ => CloneRepoAsync());
             BrowseFolderCommand = new RelayCommand(_ => BrowseFolder());
+
+            Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                CheckForActivePlanRepo();
+            }, DispatcherPriority.ApplicationIdle);
         }
 
         // --- Actions ---
+        private void CheckForActivePlanRepo()
+        {
+            _log.Info("CheckForActivePlanRepo: Starting check...");
 
+            // 1. Get the current TestPlan path
+            string planPath = _tapContext.TryGetCurrentTestPlanPath();
+            _log.Info($"CheckForActivePlanRepo: Active Plan Path -> '{planPath ?? "<null>"}'");
+
+            if (string.IsNullOrWhiteSpace(planPath))
+            {
+                _log.Info("CheckForActivePlanRepo: No active plan path found. Aborting.");
+                return;
+            }
+
+            // 2. Check if this plan lives inside a Git Repo
+            string? detectedRoot = _gitService.FindGitRoot(planPath);
+            _log.Info($"CheckForActivePlanRepo: Detected Git Root -> '{detectedRoot ?? "<null>"}'");
+
+            if (string.IsNullOrEmpty(detectedRoot))
+            {
+                _log.Info("CheckForActivePlanRepo: Plan is not in a Git repository.");
+                return;
+            }
+
+            // 3. Validate state
+            if (_gitService.IsRepositoryOpen)
+            {
+                _log.Info($"CheckForActivePlanRepo: A repository is already open at '{_gitService.GetRepositoryPath()}'. Skipping prompt.");
+                return;
+            }
+
+            // 4. Prompt the User
+            _log.Info("CheckForActivePlanRepo: Prompting user to open repo...");
+
+            var result = MessageBox.Show(
+                $"The active Test Plan is part of a Git repository at:\n{detectedRoot}\n\nDo you want to open it?",
+                "Repository Detected",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            _log.Info($"CheckForActivePlanRepo: User response -> {result}");
+
+            if (result == MessageBoxResult.Yes)
+            {
+                // 5. Trigger Open
+                RepoPath = detectedRoot;
+                _log.Info($"CheckForActivePlanRepo: Opening repository at '{RepoPath}'...");
+
+                _ = OpenRepoAsync();
+            }
+            else
+            {
+                _log.Info("CheckForActivePlanRepo: User declined to open the repository.");
+            }
+        }
+
+        private async void NavigateToWorkspace()
+        {
+            // 1. Get the Navigation Service
+            var navService = Bootstrapper.Services.GetRequiredService<NavigationService>();
+
+            // 2. Navigate BOTH regions to their main pages
+            await navService.Navigate<OperationViewModel>(NavigationRegion.SourceControl);
+            await navService.Navigate<PullRequestPageViewModel>(NavigationRegion.PullRequest);
+            await navService.Navigate<CommitGraphViewModel>(NavigationRegion.CommitGraph);
+
+            var operationVm = Bootstrapper.Services.GetRequiredService<OperationViewModel>();
+            if (operationVm != null)
+            {
+                await operationVm.InitializeRepoAsync();
+            }
+        }
         private void BrowseFolder()
         {
             var dialog = new OpenFolderDialog
@@ -83,16 +157,15 @@ namespace GitWave.ViewModels
             try
             {
                 IsBusy = true;
+
                 await Task.Run(() => _gitService.OpenRepository(RepoPath));
 
-                // If user is logged in, sync it
-                // _gitService.SetRepoUserFromAuthenticatedUser(AuthenticatedUser);
-
-                NavigateToOperations();
+                // Everything after await runs on UI thread automatically
+                NavigateToWorkspace();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to open repository: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Failed: {ex.Message}");
             }
             finally
             {
@@ -107,12 +180,23 @@ namespace GitWave.ViewModels
             try
             {
                 IsBusy = true;
-                await Task.Run(() => _gitService.CreateRepository(RepoPath));
-                NavigateToOperations();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error creating repository: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        _gitService.CreateRepository(RepoPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            MessageBox.Show($"Error creating repository: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        });
+                    }
+                });
+
+                NavigateToWorkspace();
             }
             finally
             {
@@ -150,43 +234,31 @@ namespace GitWave.ViewModels
             {
                 IsBusy = true;
 
-                // Note: CloneRepository signature might vary based on your IGitService
-                // Assuming: CloneRepository(url, destinationPath, user)
-                await Task.Run(() => _gitService.CloneRepository(SourceUrl, RepoPath, AuthenticatedUser));
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        _gitService.CloneRepository(SourceUrl, RepoPath, AuthenticatedUser);
+                    }
+                    catch (Exception ex)
+                    {
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            MessageBox.Show($"Clone failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        });
+                    }
+                });
 
-                MessageBox.Show("Repository cloned successfully!");
-                NavigateToOperations();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Clone failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                // Marshal UI updates back to STA thread
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    MessageBox.Show("Repository cloned successfully!");
+                    NavigateToWorkspace();
+                });
             }
             finally
             {
                 IsBusy = false;
-            }
-        }
-
-        private void NavigateToOperations()
-        {
-            // Use App.Services to get the MainWindow for navigation
-            try
-            {
-                var mainWindow = App.Services.GetRequiredService<MainWindow>();
-                var operationPage = App.Services.GetRequiredService<OperationPage>();
-
-                // Ensure the OperationViewModel knows which repo we just opened
-                if (operationPage.DataContext is OperationViewModel opVm)
-                {
-                    opVm.RepoPath = this.RepoPath;
-                    opVm.InitializeRepo();
-                }
-
-                mainWindow.NavigateTo(operationPage);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Navigation failed: {ex.Message}");
             }
         }
     }

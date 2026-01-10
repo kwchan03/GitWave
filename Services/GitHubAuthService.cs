@@ -31,10 +31,27 @@ namespace GitWave.Services
 
             ConfigureHttpHeaders(creds.Secret);
 
-            var res = await _http.GetAsync("https://api.github.com/user");
-            res.EnsureSuccessStatusCode(); // throws if token invalid/SSO unauthorized
-            Debug.WriteLine($"username: {creds.Username} secret: {creds.Secret}");
-            return (creds.Username, creds.Secret);
+            try
+            {
+                // 3. Test the token
+                var res = await _http.GetAsync("https://api.github.com/user");
+
+                // 4. THIS LINE CAUSES THE CRASH - Wrap it!
+                res.EnsureSuccessStatusCode();
+
+                // 5. If success, save/update host entry
+                _gcm.StoreForHost(creds.Username, creds.Secret);
+
+                return (creds.Username, creds.Secret);
+            }
+            catch (HttpRequestException ex) when (ex.Message.Contains("401"))
+            {
+                // 5. CAUGHT BAD TOKEN: Revoke it immediately
+                _gcm.Revoke("https://github.com/");
+
+                // 6. Throw a friendly error or recursively call SignInAsync() to prompt again
+                throw new Exception("Authentication failed. The saved credential was invalid and has been cleared. Please try logging in again.", ex);
+            }
         }
 
         public async Task<GitHubUser> GetCurrentUserAsync(string token)

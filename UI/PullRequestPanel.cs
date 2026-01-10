@@ -1,5 +1,8 @@
-﻿using GitWave.UI.Pages;
+﻿using GitGUI.Core;
+using GitWave.Services;
+using GitWave.UI.Controls;
 using Keysight.OpenTap.Wpf;
+using Microsoft.Extensions.DependencyInjection;
 using OpenTap;
 using System.Windows;
 
@@ -14,7 +17,10 @@ namespace GitWave.UI
 
         public FrameworkElement CreateElement(ITapDockContext context)
         {
-            return new SourceControlControl();
+            Bootstrapper.Initialize();
+            var contextService = Bootstrapper.Services.GetRequiredService<TapDockContextService>();
+            contextService.Initialize(context);
+            return new PullRequestFrame();
         }
     }
 }

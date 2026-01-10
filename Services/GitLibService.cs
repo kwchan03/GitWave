@@ -12,14 +12,26 @@ namespace GitWave.Services
     public class GitLibService : IGitService
     {
         private Repository _repo;
+        private string _repoPath;
         private readonly IGitCredentialProvider _gitCreds;
         private GitHubUser _authenticatedUser;
-
+        public event Action? OnAuthenticationChanged;
+        public event Action? OnRepositoryOpened;
         public GitHubUser AuthenticatedUser { get; set; }
+        public string GetRepositoryPath()
+        {
+            return _repoPath;
+        }
 
         public GitLibService(IGitCredentialProvider gitCreds)
         {
             _gitCreds = gitCreds ?? throw new ArgumentNullException(nameof(gitCreds));
+        }
+
+        public void SetAuthenticatedUser(GitHubUser user)
+        {
+            AuthenticatedUser = user;
+            OnAuthenticationChanged?.Invoke();
         }
 
         #region Repository Management
@@ -28,11 +40,16 @@ namespace GitWave.Services
             if (!Repository.IsValid(path))
                 throw new InvalidOperationException($"No git repository found at {path}");
 
+            _repoPath = path;
             _repo = new Repository(path);
 
             if (_authenticatedUser != null)
                 SetRepoUserFromAuthenticatedUser(_authenticatedUser);
-
+            IsRepositoryOpen = true;
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                OnRepositoryOpened?.Invoke();
+            });
             return true;
         }
 
@@ -41,30 +58,38 @@ namespace GitWave.Services
             if (!Directory.Exists(path))
                 Directory.CreateDirectory(path);
 
-            if (Repository.IsValid(path))
-            {
-                _repo = new Repository(path);
-            }
-            else
+            if (!Repository.IsValid(path))
             {
                 Repository.Init(path);
-                _repo = new Repository(path);
-                CreateInitialCommit();
+
+                using (var tempRepo = new Repository(path))
+                {
+                    // Create README
+                    var readmePath = Path.Combine(tempRepo.Info.WorkingDirectory, "README.md");
+                    if (!File.Exists(readmePath))
+                        File.WriteAllText(readmePath, "# Initial Commit\nThis is the first commit.");
+
+                    // Stage
+                    Commands.Stage(tempRepo, readmePath);
+
+                    Signature signature;
+                    if (_authenticatedUser != null)
+                    {
+                        string name = _authenticatedUser.Login;
+                        string email = !string.IsNullOrWhiteSpace(_authenticatedUser.Email)
+                            ? _authenticatedUser.Email
+                            : $"{name}@users.noreply.github.com";
+                        signature = new Signature(name, email, DateTimeOffset.Now);
+                    }
+                    else
+                    {
+                        signature = tempRepo.Config.BuildSignature(DateTimeOffset.Now);
+                    }
+
+                    tempRepo.Commit("Initial commit", signature, signature);
+                }
             }
-
-            if (_authenticatedUser != null)
-                SetRepoUserFromAuthenticatedUser(_authenticatedUser);
-        }
-
-        private void CreateInitialCommit()
-        {
-            var readmePath = Path.Combine(_repo.Info.WorkingDirectory, "README.md");
-            if (!File.Exists(readmePath))
-                File.WriteAllText(readmePath, "# Initial Commit\nThis is the first commit.");
-
-            Commands.Stage(_repo, readmePath);
-            var signature = BuildSignature();
-            _repo.Commit("Initial commit", signature, signature);
+            OpenRepository(path);
         }
 
         public Repository GetRepository()
@@ -72,6 +97,23 @@ namespace GitWave.Services
             if (_repo == null)
                 throw new InvalidOperationException("Repository not opened.");
             return _repo;
+        }
+
+        public string? FindGitRoot(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            try
+            {
+                // LibGit2Sharp.Repository.Discover searches up the directory tree for .git
+                var gitPath = Repository.Discover(path);
+                if (!string.IsNullOrEmpty(gitPath))
+                {
+                    return gitPath;
+                }
+            }
+            catch
+            { }
+            return null;
         }
 
         public bool TryGetRepository(out Repository repository)
@@ -96,7 +138,17 @@ namespace GitWave.Services
         private Signature BuildSignature()
         {
             if (_authenticatedUser != null)
-                return new Signature(_authenticatedUser.Login, _authenticatedUser.Email ?? "user@example.com", DateTimeOffset.Now);
+            {
+                string name = _authenticatedUser.Login;
+
+                // FIX: Construct the specific GitHub no-reply email if the public one is missing.
+                // Format: {username}@users.noreply.github.com
+                string email = !string.IsNullOrWhiteSpace(_authenticatedUser.Email)
+                    ? _authenticatedUser.Email
+                    : $"{name}@users.noreply.github.com";
+
+                return new Signature(name, email, DateTimeOffset.Now);
+            }
 
             return _repo.Config.BuildSignature(DateTimeOffset.Now);
         }
@@ -151,7 +203,7 @@ namespace GitWave.Services
 
         public string CurrentBranchName => _repo?.Head?.FriendlyName ?? "<none>";
 
-        public bool IsRepositoryOpen => _repo != null;
+        public bool IsRepositoryOpen { get; private set; }
 
         public void CreateBranch(string branchName)
         {
@@ -163,10 +215,31 @@ namespace GitWave.Services
         public void MergeBranch(string branchName)
         {
             if (_repo == null) throw new InvalidOperationException("Repository not opened.");
+
             var target = _repo.Branches[branchName];
             if (target == null) throw new InvalidOperationException($"Branch '{branchName}' not found.");
+
+            if (_repo.RetrieveStatus().IsDirty)
+            {
+                throw new InvalidOperationException("You have uncommitted changes. Please commit or stash them before merging.");
+            }
+
             var signature = BuildSignature();
-            _repo.Merge(target, signature);
+
+            // 2. Capture the result
+            var result = _repo.Merge(target, signature);
+
+            // 3. FIX: specific check for conflicts
+            if (result.Status == MergeStatus.Conflicts)
+            {
+                // Throwing here allows your ViewModel to catch it and show a "Merge Failed" message box
+                throw new InvalidOperationException("Merge resulted in conflicts. Please resolve them in the 'Changes' list before committing.");
+            }
+            else if (result.Status == MergeStatus.UpToDate)
+            {
+                // Optional: You can choose to throw or just let it finish silently
+                // throw new InvalidOperationException("Branch is already up to date.");
+            }
         }
 
         public void DeleteBranch(string branchName)
@@ -201,20 +274,35 @@ namespace GitWave.Services
             var staged = status.Where(s => IsFileStaged(s.State))
                                .Select(s => new ChangeItem { FilePath = s.FilePath, Status = MapStatus(s.State), IsStaged = true });
 
-            var unstaged = status.Where(s => !IsFileStaged(s.State))
+            var unstaged = status.Where(s => IsFileUnstaged(s.State))
                                  .Select(s => new ChangeItem { FilePath = s.FilePath, Status = MapStatus(s.State), IsStaged = false });
 
             return (staged, unstaged);
         }
 
-        public void StageFile(string path) => Commands.Stage(_repo, path);
-        public void UnstageFile(string path) => Commands.Unstage(_repo, path);
+        public void StageFile(string path)
+        {
+            var cleanPath = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            Commands.Stage(_repo, cleanPath);
+        }
+        public void UnstageFile(string path)
+        {
+            var cleanPath = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            Commands.Unstage(_repo, cleanPath);
+        }
 
         private bool IsFileStaged(FileStatus status) =>
             status.HasFlag(FileStatus.NewInIndex) ||
             status.HasFlag(FileStatus.ModifiedInIndex) ||
             status.HasFlag(FileStatus.DeletedFromIndex) ||
             status.HasFlag(FileStatus.RenamedInIndex);
+
+        private bool IsFileUnstaged(FileStatus status) =>
+            status.HasFlag(FileStatus.NewInWorkdir) ||
+            status.HasFlag(FileStatus.ModifiedInWorkdir) ||
+            status.HasFlag(FileStatus.DeletedFromWorkdir) ||
+            status.HasFlag(FileStatus.RenamedInWorkdir) ||
+            status.HasFlag(FileStatus.TypeChangeInWorkdir);
 
         private ChangeStatus MapStatus(FileStatus status)
         {
@@ -332,12 +420,7 @@ namespace GitWave.Services
                 };
                 Repository.Clone(sourceUrl, finalPath, co);
             }
-
-            _repo = new Repository(finalPath);
-
-            _authenticatedUser = AuthenticatedUser;
-            if (_authenticatedUser != null)
-                SetRepoUserFromAuthenticatedUser(_authenticatedUser);
+            OpenRepository(finalPath);
         }
 
         /// e.g. "https://github.com/owner/repo.git" -> "repo"

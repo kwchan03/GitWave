@@ -15,5 +15,6 @@
         /// Return username+token suitable for Git over HTTPS (not API OAuth token).
         GitCredentials GetForUrl(string httpsRemoteUrl);
         void StoreForHost(string username, string token);
+        void Revoke(string url);
     }
 }

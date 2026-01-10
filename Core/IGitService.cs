@@ -5,12 +5,17 @@ namespace GitWave.Core
 {
     public interface IGitService
     {
+        event Action? OnAuthenticationChanged;
+        event Action? OnRepositoryOpened;
         GitHubUser AuthenticatedUser { get; set; }
+        string GetRepositoryPath();
+        void SetAuthenticatedUser(GitHubUser user);
         void CreateRepository(string path);
         IEnumerable<CommitInfo> GetCommitLog(int maxCount = 50);
         IEnumerable<Commit> FetchCommitsForGraph();
         bool OpenRepository(string repositoryPath);
         Repository GetRepository();
+        string? FindGitRoot(string path);
         bool TryGetRepository(out Repository repository);
         bool IsRepositoryOpen { get; }
 

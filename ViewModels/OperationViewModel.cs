@@ -1,9 +1,8 @@
 ﻿using GitWave.Controls;
 using GitWave.Core;
 using GitWave.Models;
-using GitWave.UI.Pages;
+using GitWave.Services;
 using LibGit2Sharp;
-using Microsoft.Extensions.DependencyInjection;
 using OpenTap;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -16,6 +15,8 @@ namespace GitWave.ViewModels
     public class OperationViewModel : BaseViewModel
     {
         private readonly IGitService _git;
+        private readonly CommitGraphViewModel _commitGraph;
+        private readonly RepositoryWatcherService _repoWatcher;
 
         // --- State ---
         private string _repoPath = "";
@@ -25,9 +26,31 @@ namespace GitWave.ViewModels
             set => SetProperty(ref _repoPath, value);
         }
 
-        public BranchInfo SelectedBranch { get; set; }
-        public string NewBranchName { get; set; } = "";
-        public string CommitMessage { get; set; } = "";
+        private GitHubUser _authenticatedUser;
+        public GitHubUser AuthenticatedUser
+        {
+            get => _authenticatedUser;
+            set => SetProperty(ref _authenticatedUser, value);
+        }
+
+        private BranchInfo _selectedBranch;
+        public BranchInfo SelectedBranch
+        {
+            get => _selectedBranch;
+            set => SetProperty(ref _selectedBranch, value);
+        }
+        private string _newBranchName = "";
+        public string NewBranchName
+        {
+            get => _newBranchName;
+            set => SetProperty(ref _newBranchName, value);
+        }
+        private string _commitMessage = "";
+        public string CommitMessage
+        {
+            get => _commitMessage;
+            set => SetProperty(ref _commitMessage, value);
+        }
         private string _currentBranch = "<none>";
         public string CurrentBranch
         {
@@ -35,7 +58,10 @@ namespace GitWave.ViewModels
             private set => SetProperty(ref _currentBranch, value);
         }
 
-        public CommitGraphViewModel Graph { get; }
+        public CommitGraphViewModel CommitGraph
+        {
+            get => _commitGraph;
+        }
 
         // --- Collections ---
         public ObservableCollection<CommitInfo> Commits { get; } = new ObservableCollection<CommitInfo>();
@@ -67,24 +93,22 @@ namespace GitWave.ViewModels
         public ICommand PullCommand { get; }
         public ICommand PushCommand { get; }
 
-        public OperationViewModel(IGitService git)
+        public OperationViewModel(IGitService git, CommitGraphViewModel commitGraph, RepositoryWatcherService repoWatcher)
         {
             _git = git ?? throw new ArgumentNullException(nameof(git));
-            Graph = new CommitGraphViewModel(_git);
+            _commitGraph = commitGraph ?? throw new ArgumentNullException(nameof(commitGraph));
+            _repoWatcher = repoWatcher ?? throw new ArgumentNullException(nameof(repoWatcher));
 
-            // Navigation
-            ShowPullRequestsPageCommand = new RelayCommand(_ => NavigateTo<PullRequestPage>());
-            ShowRepositoryPageCommand = new RelayCommand(_ => NavigateTo<RepositoryPage>());
+            _repoWatcher.OnRepositoryChanged += HandleRepositoryChanged;
 
             // Branch operations
             LoadBranchesCommand = new RelayCommand(_ => ExecuteLoadBranches());
             CheckoutBranchCommand = new AsyncRelayCommand(_ => ExecuteCheckoutBranch(), _ => SelectedBranch != null);
-            CreateBranchCommand = new RelayCommand(_ => ExecuteCreateBranch());
-            MergeBranchCommand = new RelayCommand(_ => ExecuteMergeBranch(), _ => SelectedBranch != null);
-            DeleteBranchCommand = new RelayCommand(_ => ExecuteDeleteBranch());
+            CreateBranchCommand = new AsyncRelayCommand(_ => ExecuteCreateBranch());
+            MergeBranchCommand = new AsyncRelayCommand(_ => ExecuteMergeBranch(), _ => SelectedBranch != null);
+            DeleteBranchCommand = new AsyncRelayCommand(_ => ExecuteDeleteBranch());
 
             // File changes
-            RefreshChangesCommand = new RelayCommand(_ => ExecuteRefreshChanges());
             StageCommand = new RelayCommand(p => ExecuteStageFile(p));
             UnstageCommand = new RelayCommand(p => ExecuteUnstageFile(p));
             ShowCommand = new RelayCommand(p => ExecuteShowDiff(p));
@@ -95,6 +119,11 @@ namespace GitWave.ViewModels
             // Remote operations
             PullCommand = new AsyncRelayCommand(_ => ExecutePullCurrentBranch(), _ => !string.IsNullOrWhiteSpace(RepoPath));
             PushCommand = new AsyncRelayCommand(_ => ExecutePushCurrentBranch(), _ => !string.IsNullOrWhiteSpace(RepoPath));
+
+            if (_git.IsRepositoryOpen)
+            {
+                _ = InitializeRepoAsync();
+            }
         }
 
         // --- Initialization ---
@@ -102,24 +131,30 @@ namespace GitWave.ViewModels
         /// <summary>
         /// Called by RepositoryViewModel when a repo is opened/created.
         /// </summary>
-        public async void InitializeRepo()
+        public async Task InitializeRepoAsync()
         {
-            if (string.IsNullOrEmpty(RepoPath)) return;
+            if (!_git.IsRepositoryOpen)
+            {
+                _repoWatcher.StopWatching();
+                return;
+            }
+            // 2. Retrieve the active path from the service
+            RepoPath = _git.GetRepositoryPath();
+            AuthenticatedUser = _git.AuthenticatedUser;
 
             try
             {
                 IsBusy = true;
+                _repoWatcher.StopWatching();
 
-                // Ensure service knows about the repo
-                _git.OpenRepository(RepoPath);
-
-                // Load UI Data
-                ExecuteLoadCommits();
-                ExecuteLoadBranches();
-                ExecuteRefreshChanges();
-
-                // Load Graph
-                await Graph.LoadAllBranchesAsync();
+                await Task.Run(() =>
+                {
+                    ExecuteLoadCommits();
+                    ExecuteLoadBranches();
+                    ExecuteRefreshChanges();
+                });
+                // 4. Load graph on background thread
+                await _commitGraph.LoadAllBranchesAsync();
             }
             catch (Exception ex)
             {
@@ -128,25 +163,28 @@ namespace GitWave.ViewModels
             }
             finally
             {
+                if (!string.IsNullOrEmpty(RepoPath))
+                {
+                    _repoWatcher.StartWatching(RepoPath);
+                }
                 IsBusy = false;
             }
         }
 
-        // --- Actions ---
-
-        private void NavigateTo<T>() where T : System.Windows.Controls.Page
-        {
-            var main = App.Services.GetRequiredService<MainWindow>();
-            var page = App.Services.GetRequiredService<T>();
-            main.NavigateTo(page);
-        }
 
         private void ExecuteLoadCommits()
         {
             try
             {
-                Commits.Clear();
-                foreach (var c in _git.GetCommitLog()) Commits.Add(c);
+                // A. Fetch
+                var logs = _git.GetCommitLog().ToList();
+
+                // B. Update
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    Commits.Clear();
+                    foreach (var c in logs) Commits.Add(c);
+                });
             }
             catch (Exception ex) { Debug.WriteLine(ex.Message); }
         }
@@ -155,10 +193,17 @@ namespace GitWave.ViewModels
         {
             try
             {
-                Branches.Clear();
-                foreach (var b in _git.GetBranches()) Branches.Add(b);
-                var current = Branches.FirstOrDefault(b => b.IsCurrent);
-                CurrentBranch = current?.Name ?? "<none>";
+                // A. Fetch on Background Thread
+                var branchList = _git.GetBranches().ToList();
+                var currentName = branchList.FirstOrDefault(b => b.IsCurrent)?.Name ?? "<none>";
+
+                // B. Update on UI Thread
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    Branches.Clear();
+                    foreach (var b in branchList) Branches.Add(b);
+                    CurrentBranch = currentName;
+                });
             }
             catch (Exception ex) { Debug.WriteLine(ex.Message); }
         }
@@ -168,44 +213,80 @@ namespace GitWave.ViewModels
             try
             {
                 IsBusy = true;
-                _git.CheckoutBranch(SelectedBranch.Name);
+                _repoWatcher.StopWatching();
 
-                // Refresh everything
-                ExecuteLoadBranches();
-                ExecuteLoadCommits();
-                ExecuteRefreshChanges();
-                await Graph.RefreshAsync();
+                await Task.Run(() =>
+                {
+                    _git.CheckoutBranch(SelectedBranch.Name);
+                    ExecuteLoadCommits();
+                    ExecuteLoadBranches();
+                    ExecuteRefreshChanges();
+                });
+                await _commitGraph.RefreshAsync();
             }
             catch (Exception ex) { MessageBox.Show($"Checkout failed: {ex.Message}"); }
-            finally { IsBusy = false; }
-        }
-
-        private void ExecuteCreateBranch()
-        {
-            try
+            finally
             {
-                _git.CreateBranch(NewBranchName);
-                NewBranchName = "";
-                ExecuteLoadBranches();
-                ExecuteLoadCommits();
-                ExecuteRefreshChanges();
+                IsBusy = false;
+                _repoWatcher.StartWatching(RepoPath);
             }
-            catch (Exception ex) { MessageBox.Show($"Create Branch failed: {ex.Message}"); }
         }
 
-        private void ExecuteMergeBranch()
+        private async Task ExecuteCreateBranch()
+        {
+            if (string.IsNullOrWhiteSpace(NewBranchName))
+            {
+                MessageBox.Show("Please enter a branch name.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                // Capture the name to use inside the thread
+                string branchName = NewBranchName;
+
+                IsBusy = true;
+
+                await Task.Run(() =>
+                {
+                    _git.CreateBranch(branchName);
+
+                    ExecuteLoadBranches();
+                    ExecuteLoadCommits();
+                    ExecuteRefreshChanges();
+                });
+
+                NewBranchName = "";
+                MessageBox.Show($"Branch '{branchName}' created successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Create Branch failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        private async Task ExecuteMergeBranch()
         {
             try
             {
-                _git.MergeBranch(SelectedBranch.Name);
-                ExecuteLoadBranches();
-                ExecuteLoadCommits();
-                ExecuteRefreshChanges();
+                await Task.Run(() =>
+                {
+                    _git.MergeBranch(SelectedBranch.Name);
+                    ExecuteLoadBranches();
+                    ExecuteLoadCommits();
+                    ExecuteRefreshChanges();
+                });
+                await _commitGraph.RefreshAsync();
+                MessageBox.Show($"Merge successfully");
             }
             catch (Exception ex) { MessageBox.Show($"Merge failed: {ex.Message}"); }
         }
 
-        private void ExecuteDeleteBranch()
+        private async Task ExecuteDeleteBranch()
         {
             if (SelectedBranch == null) return;
 
@@ -228,11 +309,14 @@ namespace GitWave.ViewModels
 
             try
             {
-                _git.DeleteBranch(SelectedBranch.Name);
-                MessageBox.Show($"Branch '{SelectedBranch.Name}' deleted successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
-                ExecuteLoadBranches();
-                ExecuteLoadCommits();
-                ExecuteRefreshChanges();
+                await Task.Run(() =>
+                {
+                    _git.DeleteBranch(SelectedBranch.Name);
+                    MessageBox.Show($"Branch '{SelectedBranch.Name}' deleted successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    ExecuteLoadBranches();
+                    ExecuteLoadCommits();
+                    ExecuteRefreshChanges();
+                });
             }
             catch (Exception ex)
             {
@@ -289,11 +373,11 @@ namespace GitWave.ViewModels
                     MessageBox.Show("Commit message cannot be empty.");
                     return;
                 }
-                _git.Commit(CommitMessage);
+                await Task.Run(() => _git.Commit(CommitMessage));
                 CommitMessage = "";
                 ExecuteLoadCommits();
                 ExecuteRefreshChanges();
-                await Graph.RefreshAsync();
+                await _commitGraph.RefreshAsync();
             }
             catch (Exception ex) { MessageBox.Show($"Commit failed: {ex.Message}"); }
             finally { IsBusy = false; }
@@ -303,35 +387,105 @@ namespace GitWave.ViewModels
         {
             try
             {
-                StagedChanges.Clear();
-                UnstagedChanges.Clear();
+                // A. Fetch
                 var (staged, unstaged) = _git.GetChanges();
-                foreach (var s in staged) StagedChanges.Add(s);
-                foreach (var u in unstaged) UnstagedChanges.Add(u);
+
+                // Snapshot to lists to prevent enumeration issues
+                var stagedList = staged.ToList();
+                var unstagedList = unstaged.ToList();
+
+                // B. Update
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    StagedChanges.Clear();
+                    UnstagedChanges.Clear();
+                    foreach (var s in stagedList) StagedChanges.Add(s);
+                    foreach (var u in unstagedList) UnstagedChanges.Add(u);
+                });
             }
             catch (Exception ex) { Debug.WriteLine(ex.Message); }
+        }
+
+        private void HandleRepositoryChanged(string repositoryPath)
+        {
+            Debug.WriteLine($"[OPS] Repository changed, refreshing view...");
+
+            // Refresh on UI thread
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    ExecuteRefreshChanges();
+                    Debug.WriteLine($"[OPS] ✅ Repository view refreshed");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[OPS] ❌ Error refreshing view: {ex.Message}");
+                }
+            });
         }
 
         private async Task ExecutePullCurrentBranch()
         {
             try
             {
-                await Task.Run(() => _git.PullCurrentBranch(RepoPath, _git.AuthenticatedUser));
-                ExecuteLoadCommits();
-                ExecuteRefreshChanges();
-                await Graph.RefreshAsync();
+                IsBusy = true;
+                _repoWatcher.StopWatching();
+
+                await Task.Run(() =>
+                {
+                    _git.PullCurrentBranch(RepoPath, _git.AuthenticatedUser);
+
+                    // Refresh Data
+                    ExecuteLoadCommits();
+                    ExecuteLoadBranches();
+                    ExecuteRefreshChanges();
+                });
+
+                await _commitGraph.RefreshAsync();
+
+                // Success Feedback
+                MessageBox.Show("Pull completed successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            catch (Exception ex) { MessageBox.Show($"Pull failed: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Pull failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _repoWatcher.StartWatching(RepoPath);
+                IsBusy = false;
+            }
         }
 
         private async Task ExecutePushCurrentBranch()
         {
             try
             {
+                IsBusy = true;
+
                 await Task.Run(() => _git.PushCurrentBranch(RepoPath, _git.AuthenticatedUser));
-                await Graph.RefreshAsync();
+
+                // Refresh on UI Thread
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    ExecuteLoadCommits();
+                    ExecuteLoadBranches();
+                });
+
+                await _commitGraph.RefreshAsync();
+
+                // Success Feedback
+                MessageBox.Show("Push completed successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            catch (Exception ex) { MessageBox.Show($"Push failed: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Push failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsBusy = false; // Hides the Progress Bar
+            }
         }
 
         private void ExecuteShowDiff(object? parameter)

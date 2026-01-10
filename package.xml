@@ -6,13 +6,23 @@ Version: The version of the package. Must be in a semver 2.0 compatible format. 
 For Version the following macro is available (Only works if the project directory is under Git source control):
 $(GitVersion) - Gets the version from Git in the recommended format Major.Minor.Build-PreRelease+CommitHash.BranchName.
 -->
-<Package Name="package" xmlns="http://opentap.io/schemas/package" InfoLink="" Version="0.1.0-alpha" OS="Windows,Linux">
+<Package Name="GitWave" xmlns="http://opentap.io/schemas/package" InfoLink="" Version="0.1.0-alpha" OS="Windows,Linux">
 <Description>This is my OpenTAP plugin package.</Description>
 	<Files>
 	<File Path="Packages/GitWave/GitWave.dll" SourcePath="GitWave.dll">
 		<Plugins>
 			<Plugin Type="GitWave.SourceControlPanel" BaseType="ITapDockPanel">
 				<Name>Source Control</Name>
+				<Order>-10000</Order>
+				<Browsable>true</Browsable>
+				<Description />
+				<Collapsed>false</Collapsed>
+				<Groups>
+					<String>GitWave</String>
+				</Groups>
+			</Plugin>
+			<Plugin Type="GitWave.CommitGraphPanel" BaseType="ITapDockPanel">
+				<Name>Commit Graph</Name>
 				<Order>-10000</Order>
 				<Browsable>true</Browsable>
 				<Description />
@@ -33,5 +43,17 @@ $(GitVersion) - Gets the version from Git in the recommended format Major.Minor.
 			</Plugin>
 		</Plugins>
     </File>
+
+    <File Path="Packages/GitWave/Octokit.dll" SourcePath="Octokit.dll" />
+
+    <File Path="Packages/GitWave/Markdig.dll" SourcePath="Markdig.dll" />
+    <File Path="Packages/GitWave/Markdig.Wpf.dll" SourcePath="Markdig.Wpf.dll" />
+
+    <File Path="Packages/GitWave/Microsoft.Extensions.DependencyInjection.dll" SourcePath="Microsoft.Extensions.DependencyInjection.dll" />
+    <File Path="Packages/GitWave/Microsoft.Extensions.DependencyInjection.Abstractions.dll" SourcePath="Microsoft.Extensions.DependencyInjection.Abstractions.dll" />
+
+    <File Path="Packages/GitWave/LibGit2Sharp.dll" SourcePath="LibGit2Sharp.dll" />
+
+    <File Path="Packages/GitWave/git2-3f4182d.dll" SourcePath="runtimes/win-x64/native/git2-3f4182d.dll" />
   </Files>
 </Package>
