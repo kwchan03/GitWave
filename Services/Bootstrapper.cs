@@ -38,7 +38,7 @@ namespace GitGUI.Core
             // Content ViewModels (The actual screens)
             services.AddTransient<LoginViewModel>();
             services.AddSingleton<RepositoryViewModel>();
-            services.AddTransient<CommitGraphViewModel>();
+            services.AddSingleton<CommitGraphViewModel>();
             services.AddTransient<OperationViewModel>();     // Transient so it doesn't keep state (tabs, logs)
             services.AddTransient<PullRequestPageViewModel>(); // Transient if you want to keep loaded PRs
 

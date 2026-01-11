@@ -68,6 +68,12 @@ namespace GitWave.ViewModels
                     navService.Navigate<RepositoryViewModel>(NavigationRegion.CommitGraph);
                 }
             }
+            catch (InvalidOperationException ex)
+            {
+                _log.Error($"Login failed: {ex.Message}");
+                // ✅ Show different messages for different scenarios
+                MessageBox.Show(ex.Message, "Login Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
             catch (Exception ex)
             {
                 // 4. Log the full error to OpenTAP

@@ -66,106 +66,198 @@ namespace GitWave.ViewModels
         // --- Actions ---
         private void CheckForActivePlanRepo()
         {
-            _log.Info("CheckForActivePlanRepo: Starting check...");
-
-            // 1. Get the current TestPlan path
-            string planPath = _tapContext.TryGetCurrentTestPlanPath();
-            _log.Info($"CheckForActivePlanRepo: Active Plan Path -> '{planPath ?? "<null>"}'");
-
-            if (string.IsNullOrWhiteSpace(planPath))
+            try
             {
-                _log.Info("CheckForActivePlanRepo: No active plan path found. Aborting.");
-                return;
+                _log.Info("CheckForActivePlanRepo: Starting check...");
+
+                // 1. Get the current TestPlan path
+                string planPath = _tapContext.TryGetCurrentTestPlanPath();
+                _log.Info($"CheckForActivePlanRepo: Active Plan Path -> '{planPath ?? "<null>"}'");
+
+                if (string.IsNullOrWhiteSpace(planPath))
+                {
+                    _log.Info("CheckForActivePlanRepo: No active plan path found. Aborting.");
+                    return;
+                }
+
+                // 2. Check if this plan lives inside a Git Repo
+                string? detectedRoot = _gitService.FindGitRoot(planPath);
+                _log.Info($"CheckForActivePlanRepo: Detected Git Root -> '{detectedRoot ?? "<null>"}'");
+
+                if (string.IsNullOrEmpty(detectedRoot))
+                {
+                    _log.Info("CheckForActivePlanRepo: Plan is not in a Git repository.");
+                    return;
+                }
+
+                // 3. Validate state
+                if (_gitService.IsRepositoryOpen)
+                {
+                    _log.Info($"CheckForActivePlanRepo: A repository is already open at '{_gitService.GetRepositoryPath()}'. Skipping prompt.");
+                    return;
+                }
+
+                // 4. Prompt the User
+                _log.Info("CheckForActivePlanRepo: Prompting user to open repo...");
+
+                var result = MessageBox.Show(
+                    $"The active Test Plan is part of a Git repository at:\n{detectedRoot}\n\nDo you want to open it?",
+                    "Repository Detected",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                _log.Info($"CheckForActivePlanRepo: User response -> {result}");
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    // 5. Trigger Open
+                    RepoPath = detectedRoot;
+                    _log.Info($"CheckForActivePlanRepo: Opening repository at '{RepoPath}'...");
+
+                    _ = OpenRepoAsync();
+                }
+                else
+                {
+                    _log.Info("CheckForActivePlanRepo: User declined to open the repository.");
+                }
             }
-
-            // 2. Check if this plan lives inside a Git Repo
-            string? detectedRoot = _gitService.FindGitRoot(planPath);
-            _log.Info($"CheckForActivePlanRepo: Detected Git Root -> '{detectedRoot ?? "<null>"}'");
-
-            if (string.IsNullOrEmpty(detectedRoot))
+            catch (Exception ex)
             {
-                _log.Info("CheckForActivePlanRepo: Plan is not in a Git repository.");
-                return;
-            }
-
-            // 3. Validate state
-            if (_gitService.IsRepositoryOpen)
-            {
-                _log.Info($"CheckForActivePlanRepo: A repository is already open at '{_gitService.GetRepositoryPath()}'. Skipping prompt.");
-                return;
-            }
-
-            // 4. Prompt the User
-            _log.Info("CheckForActivePlanRepo: Prompting user to open repo...");
-
-            var result = MessageBox.Show(
-                $"The active Test Plan is part of a Git repository at:\n{detectedRoot}\n\nDo you want to open it?",
-                "Repository Detected",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            _log.Info($"CheckForActivePlanRepo: User response -> {result}");
-
-            if (result == MessageBoxResult.Yes)
-            {
-                // 5. Trigger Open
-                RepoPath = detectedRoot;
-                _log.Info($"CheckForActivePlanRepo: Opening repository at '{RepoPath}'...");
-
-                _ = OpenRepoAsync();
-            }
-            else
-            {
-                _log.Info("CheckForActivePlanRepo: User declined to open the repository.");
+                _log.Error($"CheckForActivePlanRepo: Unexpected error: {ex.Message}");
+                _log.Debug(ex);
+                MessageBox.Show(
+                    $"An error occurred while checking for repository:\n{ex.Message}",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
         private async void NavigateToWorkspace()
         {
-            // 1. Get the Navigation Service
-            var navService = Bootstrapper.Services.GetRequiredService<NavigationService>();
-
-            // 2. Navigate BOTH regions to their main pages
-            await navService.Navigate<OperationViewModel>(NavigationRegion.SourceControl);
-            await navService.Navigate<PullRequestPageViewModel>(NavigationRegion.PullRequest);
-            await navService.Navigate<CommitGraphViewModel>(NavigationRegion.CommitGraph);
-
-            var operationVm = Bootstrapper.Services.GetRequiredService<OperationViewModel>();
-            if (operationVm != null)
+            try
             {
-                await operationVm.InitializeRepoAsync();
+                _log.Info("NavigateToWorkspace: Starting navigation...");
+
+                // 1. Get the Navigation Service
+                var navService = Bootstrapper.Services.GetRequiredService<NavigationService>();
+
+                // 2. Navigate BOTH regions to their main pages
+                _log.Debug("Navigating to OperationViewModel...");
+                await navService.Navigate<OperationViewModel>(NavigationRegion.SourceControl);
+
+                _log.Debug("Navigating to PullRequestPageViewModel...");
+                await navService.Navigate<PullRequestPageViewModel>(NavigationRegion.PullRequest);
+
+                _log.Debug("Navigating to CommitGraphViewModel...");
+                await navService.Navigate<CommitGraphViewModel>(NavigationRegion.CommitGraph);
+
+                _log.Debug("Initializing OperationViewModel...");
+                var operationVm = Bootstrapper.Services.GetRequiredService<OperationViewModel>();
+                //if (operationVm != null)
+                //{
+                //    await operationVm.InitializeRepoAsync();
+                //    _log.Info("NavigateToWorkspace: Navigation completed successfully");
+                //}
+                //else
+                //{
+                //    _log.Error("NavigateToWorkspace: OperationViewModel is null");
+                //    MessageBox.Show(
+                //        "Failed to initialize operation view.",
+                //        "Error",
+                //        MessageBoxButton.OK,
+                //        MessageBoxImage.Error);
+                //}
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"NavigateToWorkspace: Error: {ex.Message}");
+                _log.Debug(ex);
+                MessageBox.Show(
+                    $"Failed to navigate to workspace:\n{ex.Message}",
+                    "Navigation Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
+
         private void BrowseFolder()
         {
-            var dialog = new OpenFolderDialog
+            try
             {
-                Title = "Select Repository Folder",
-                InitialDirectory = System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments)
-            };
+                var dialog = new OpenFolderDialog
+                {
+                    Title = "Select Repository Folder",
+                    InitialDirectory = System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments)
+                };
 
-            if (dialog.ShowDialog() == true)
+                if (dialog.ShowDialog() == true)
+                {
+                    RepoPath = dialog.FolderName;
+                    _log.Debug($"BrowseFolder: Selected folder: {RepoPath}");
+                }
+            }
+            catch (Exception ex)
             {
-                RepoPath = dialog.FolderName;
+                _log.Error($"BrowseFolder: Error: {ex.Message}");
+                MessageBox.Show(
+                    $"Failed to browse folder:\n{ex.Message}",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
         private async Task OpenRepoAsync()
         {
-            if (string.IsNullOrWhiteSpace(RepoPath)) return;
-
             try
             {
+                if (string.IsNullOrWhiteSpace(RepoPath))
+                {
+                    MessageBox.Show(
+                        "Please select a repository folder.",
+                        "Invalid Path",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                _log.Info($"OpenRepoAsync: Opening repository at '{RepoPath}'...");
                 IsBusy = true;
 
-                await Task.Run(() => _gitService.OpenRepository(RepoPath));
+                await Task.Run(() =>
+                {
+                    if (!System.IO.Directory.Exists(RepoPath))
+                    {
+                        throw new InvalidOperationException($"Directory does not exist: {RepoPath}");
+                    }
+
+                    _gitService.OpenRepository(RepoPath);
+                });
+
+                _log.Info("OpenRepoAsync: Repository opened successfully");
 
                 // Everything after await runs on UI thread automatically
                 NavigateToWorkspace();
             }
+            catch (InvalidOperationException ex)
+            {
+                _log.Error($"OpenRepoAsync: Invalid operation: {ex.Message}");
+                MessageBox.Show(
+                    $"Failed to open repository:\n{ex.Message}",
+                    "Invalid Repository",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed: {ex.Message}");
+                _log.Error($"OpenRepoAsync: Error: {ex.Message}");
+                _log.Debug(ex);
+                MessageBox.Show(
+                    $"Failed to open repository:\n{ex.Message}",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
             finally
             {
@@ -175,28 +267,61 @@ namespace GitWave.ViewModels
 
         private async Task CreateRepoAsync()
         {
-            if (string.IsNullOrWhiteSpace(RepoPath)) return;
-
             try
             {
+                if (string.IsNullOrWhiteSpace(RepoPath))
+                {
+                    MessageBox.Show(
+                        "Please select a folder to create the repository.",
+                        "Invalid Path",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                _log.Info($"CreateRepoAsync: Creating repository at '{RepoPath}'...");
                 IsBusy = true;
 
                 await Task.Run(() =>
                 {
                     try
                     {
+                        if (!System.IO.Directory.Exists(RepoPath))
+                        {
+                            System.IO.Directory.CreateDirectory(RepoPath);
+                            _log.Debug($"CreateRepoAsync: Created directory: {RepoPath}");
+                        }
+
                         _gitService.CreateRepository(RepoPath);
+                        MessageBox.Show(
+                        "Repository created successfully",
+                        "Created Successfully",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                        _log.Info("CreateRepoAsync: Repository created successfully");
                     }
                     catch (Exception ex)
                     {
+                        _log.Error($"CreateRepoAsync: Error: {ex.Message}");
                         Application.Current.Dispatcher.Invoke(() =>
                         {
-                            MessageBox.Show($"Error creating repository: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                            MessageBox.Show(
+                                $"Error creating repository:\n{ex.Message}",
+                                "Creation Error",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
                         });
+                        throw;
                     }
                 });
 
                 NavigateToWorkspace();
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"CreateRepoAsync: Unexpected error: {ex.Message}");
+                _log.Debug(ex);
+                // Error already shown in the task
             }
             finally
             {
@@ -206,55 +331,60 @@ namespace GitWave.ViewModels
 
         private async Task CloneRepoAsync()
         {
-            if (string.IsNullOrWhiteSpace(SourceUrl))
-            {
-                MessageBox.Show("Please provide a Source URL.");
-                return;
-            }
-
-            // If path is empty, ask for a parent directory to clone into
-            if (string.IsNullOrWhiteSpace(RepoPath))
-            {
-                var dlg = new OpenFolderDialog
-                {
-                    Title = "Select destination folder to clone into"
-                };
-
-                if (dlg.ShowDialog() == true)
-                {
-                    RepoPath = dlg.FolderName;
-                }
-                else
-                {
-                    return; // User cancelled
-                }
-            }
-
             try
             {
+                if (string.IsNullOrWhiteSpace(SourceUrl))
+                {
+                    MessageBox.Show(
+                        "Please provide a source URL.",
+                        "Missing URL",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                // If path is empty, ask for a parent directory to clone into
+                if (string.IsNullOrWhiteSpace(RepoPath))
+                {
+                    var dlg = new OpenFolderDialog
+                    {
+                        Title = "Select destination folder to clone into"
+                    };
+
+                    if (dlg.ShowDialog() == true)
+                    {
+                        RepoPath = dlg.FolderName;
+                        _log.Debug($"CloneRepoAsync: Selected destination: {RepoPath}");
+                    }
+                    else
+                    {
+                        _log.Info("CloneRepoAsync: User cancelled folder selection");
+                        return; // User cancelled
+                    }
+                }
+
+                _log.Info($"CloneRepoAsync: Cloning from '{SourceUrl}' to '{RepoPath}'...");
                 IsBusy = true;
 
                 await Task.Run(() =>
                 {
-                    try
-                    {
-                        _gitService.CloneRepository(SourceUrl, RepoPath, AuthenticatedUser);
-                    }
-                    catch (Exception ex)
-                    {
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            MessageBox.Show($"Clone failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                        });
-                    }
+                    _gitService.CloneRepository(SourceUrl, RepoPath, AuthenticatedUser);
+                    _log.Info("CloneRepoAsync: Repository cloned successfully");
                 });
 
-                // Marshal UI updates back to STA thread
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    MessageBox.Show("Repository cloned successfully!");
+                    MessageBox.Show("Repository cloned successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                     NavigateToWorkspace();
                 });
+            }
+            catch (Exception ex)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    MessageBox.Show($"Clone failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                });
+                _log.Error($"CloneRepoAsync: Unexpected error: {ex.Message}");
             }
             finally
             {

@@ -25,7 +25,7 @@ namespace GitWave.Services
         public async Task<(string Username, string Token)> SignInAsync()
         {
             // Ask for a host-wide github.com token
-            var creds = _gcm.GetForUrl("https://github.com/");
+            var creds = await Task.Run(() => _gcm.GetForUrl("https://github.com/"));
             // Optionally persist immediately (but we also store after successful Git ops)
             _gcm.StoreForHost(creds.Username, creds.Secret);
 
@@ -44,13 +44,17 @@ namespace GitWave.Services
 
                 return (creds.Username, creds.Secret);
             }
-            catch (HttpRequestException ex) when (ex.Message.Contains("401"))
+            catch (Exception ex) when (ex.Message.Contains("401"))
             {
                 // 5. CAUGHT BAD TOKEN: Revoke it immediately
-                _gcm.Revoke("https://github.com/");
+                if (ex.Message.Contains("401") || ex.Message.Contains("Unauthorized"))
+                {
+                    _gcm.Revoke("https://github.com/");
+                    throw new Exception("Authentication failed. ", ex);
+                }
 
                 // 6. Throw a friendly error or recursively call SignInAsync() to prompt again
-                throw new Exception("Authentication failed. The saved credential was invalid and has been cleared. Please try logging in again.", ex);
+                throw new Exception("Authentication failed. Please try logging in again.", ex);
             }
         }
 

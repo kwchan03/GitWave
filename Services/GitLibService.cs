@@ -406,21 +406,34 @@ namespace GitWave.Services
             // 1) Try anonymous (works for public repos)
             try
             {
-                Repository.Clone(sourceUrl, finalPath, new CloneOptions());
-            }
-            catch (LibGit2SharpException)
-            {
-                // 2) Needs auth → use GCM (or fallback PAT)
-                var creds = _gitCreds.GetForUrl(sourceUrl);
-                var co = new CloneOptions();
-                co.FetchOptions.CredentialsProvider = (_url, _user, _cred) => new UsernamePasswordCredentials
+                try
                 {
-                    Username = creds.Username,
-                    Password = creds.Secret
-                };
-                Repository.Clone(sourceUrl, finalPath, co);
+                    Repository.Clone(sourceUrl, finalPath, new CloneOptions());
+                }
+                catch (LibGit2SharpException)
+                {
+                    // 2) Needs auth → use GCM (or fallback PAT)
+                    var creds = _gitCreds.GetForUrl(sourceUrl);
+                    var co = new CloneOptions();
+                    co.FetchOptions.CredentialsProvider = (_url, _user, _cred) => new UsernamePasswordCredentials
+                    {
+                        Username = creds.Username,
+                        Password = creds.Secret
+                    };
+                    Repository.Clone(sourceUrl, finalPath, co);
+                }
+                OpenRepository(finalPath);
             }
-            OpenRepository(finalPath);
+            catch (Exception ex)
+            {
+                if (Directory.Exists(finalPath))
+                {
+                    try { Directory.Delete(finalPath, true); } catch { /* Ignore cleanup errors */ }
+                }
+                throw;
+            }
+
+
         }
 
         /// e.g. "https://github.com/owner/repo.git" -> "repo"

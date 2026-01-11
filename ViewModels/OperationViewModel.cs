@@ -17,6 +17,7 @@ namespace GitWave.ViewModels
         private readonly IGitService _git;
         private readonly CommitGraphViewModel _commitGraph;
         private readonly RepositoryWatcherService _repoWatcher;
+        private readonly OpenTap.TraceSource _log = Log.CreateSource("GitWave.Operation");
 
         // --- State ---
         private string _repoPath = "";
@@ -97,7 +98,7 @@ namespace GitWave.ViewModels
         {
             _git = git ?? throw new ArgumentNullException(nameof(git));
             _commitGraph = commitGraph ?? throw new ArgumentNullException(nameof(commitGraph));
-            _repoWatcher = repoWatcher ?? throw new ArgumentNullException(nameof(repoWatcher));
+            _repoWatcher = repoWatcher;
 
             _repoWatcher.OnRepositoryChanged += HandleRepositoryChanged;
 
@@ -133,32 +134,42 @@ namespace GitWave.ViewModels
         /// </summary>
         public async Task InitializeRepoAsync()
         {
+            _log.Info("InitializeRepoAsync called");
+            _log.Info($"IsRepositoryOpen: {_git.IsRepositoryOpen}");
+
             if (!_git.IsRepositoryOpen)
             {
+                _log.Info("Repository not open, stopping watcher");
                 _repoWatcher.StopWatching();
                 return;
             }
-            // 2. Retrieve the active path from the service
+
             RepoPath = _git.GetRepositoryPath();
             AuthenticatedUser = _git.AuthenticatedUser;
+            _log.Info($"RepoPath: {RepoPath}");
 
             try
             {
                 IsBusy = true;
                 _repoWatcher.StopWatching();
 
+                _log.Info("Loading commits, branches, changes...");
                 await Task.Run(() =>
                 {
                     ExecuteLoadCommits();
                     ExecuteLoadBranches();
                     ExecuteRefreshChanges();
                 });
-                // 4. Load graph on background thread
+                _log.Info("Commits/Branches/Changes loaded");
+
+                _log.Info("Calling CommitGraph.LoadAllBranchesAsync...");
                 await _commitGraph.LoadAllBranchesAsync();
+                _log.Info("CommitGraph.LoadAllBranchesAsync completed");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error initializing repo: {ex.Message}");
+                _log.Error($"Error initializing repo: {ex.Message}");
+                _log.Debug(ex);
                 MessageBox.Show($"Error loading repository: {ex.Message}");
             }
             finally
@@ -170,7 +181,6 @@ namespace GitWave.ViewModels
                 IsBusy = false;
             }
         }
-
 
         private void ExecuteLoadCommits()
         {

@@ -12,7 +12,7 @@ namespace GitWave.ViewModels
     {
         private readonly IGitService _git;
 
-        private readonly TraceSource _log = Log.CreateSource("GitWave");
+        private readonly TraceSource _log = Log.CreateSource("GitWave.Graph");
         public ObservableCollection<CommitRowViewModel> Items { get; } = new();
 
         private CommitRowViewModel? _selectedItem;
@@ -67,38 +67,61 @@ namespace GitWave.ViewModels
         // ---------- loading API ----------
         public async Task LoadAllBranchesAsync()
         {
-            if (!_git.IsRepositoryOpen) return;
+            _log.Info("LoadAllBranchesAsync called");
+            _log.Info($"IsRepositoryOpen: {_git.IsRepositoryOpen}");
+
+            if (!_git.IsRepositoryOpen)
+            {
+                _log.Info("Repository not open, returning early");
+                return;
+            }
 
             IsBusy = true;
             try
             {
+                _log.Info("Starting load...");
+                _log.Info($"Items.Count before clear: {Items.Count}");
+
                 var (rows, maxLaneUsed) = await Task.Run(() =>
                 {
-                    // Preferred: fetch commits (all branches) from the injected service
+                    _log.Info("Fetching commits...");
                     var commits = _git.FetchCommitsForGraph();
+                    _log.Info($"Got {commits.Count()} commits");
 
-                    // Build rows from LibGit2Sharp.Commit objects
                     var list = CommitRowFactory.FromCommits(commits, _git);
+                    _log.Info($"CommitRowFactory created {list.Count} rows");
+
                     var layouter = new CommitGraphLayouter();
                     layouter.Layout(list);
+                    _log.Info($"Layout completed, {list.Count} rows");
 
                     int maxLane = list.Count > 0 ? list.Max(r => r.PrimaryLane) : 0;
                     return (list, maxLane);
                 });
 
                 DebugDumpRows(rows);
+
+                _log.Info("Clearing Items...");
                 Items.Clear();
+                _log.Info($"Items.Count after clear: {Items.Count}");
 
+                _log.Info($"Adding {rows.Count()} rows to Items...");
                 foreach (var r in rows)
+                {
                     Items.Add(r);
-                System.Diagnostics.Debug.WriteLine($"[DBG] CommitGraphVM.Items.Count = {Items.Count}");
+                }
+                _log.Info($"Items.Count after adding: {Items.Count}");
 
-                // Compute and apply graph width with minimum enforcement
                 int lanes = maxLaneUsed + 1;
                 double calculatedWidth = CalculateGraphWidth(lanes);
                 GraphWidth = Math.Max(MinGraphWidth, calculatedWidth);
 
-                System.Diagnostics.Debug.WriteLine($"[DBG] Lanes: {lanes}, GraphWidth: {GraphWidth}, MinGraphWidth: {MinGraphWidth}");
+                _log.Info($"✅ LoadAllBranchesAsync completed with {Items.Count} items");
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"❌ Exception: {ex.Message}");
+                _log.Debug(ex);
             }
             finally
             {
